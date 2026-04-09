@@ -1,0 +1,237 @@
+/*
+ * Adros Docs — custom overrides on top of Nextra 2 dark theme.
+ *
+ * Brand:
+ *   - Pure black background (#000)
+ *   - Surface: #0a0a0a
+ *   - Border: rgba(255,255,255,0.08)
+ *   - Neon green accent: #39ff14
+ *   - Text: #ededed (primary), #a0a0a0 (muted)
+ *
+ * All selectors target Nextra's exposed CSS custom properties where possible,
+ * with fallback direct selectors where Nextra doesn't expose a variable.
+ */
+
+/* ─── Core background + text ─── */
+html.dark,
+html.dark body {
+  background-color: #000000 !important;
+  color: #ededed;
+}
+
+html.dark body {
+  /* Subtle radial glow from top-left for depth (no gradient noise) */
+  background-image: radial-gradient(
+    ellipse 800px 500px at 0% 0%,
+    rgba(57, 255, 20, 0.04) 0%,
+    transparent 60%
+  );
+  background-attachment: fixed;
+}
+
+/* ─── Top nav bar ─── */
+html.dark .nextra-nav-container,
+html.dark .nextra-nav-container-blur {
+  background-color: rgba(0, 0, 0, 0.85) !important;
+  backdrop-filter: blur(14px) saturate(180%);
+  -webkit-backdrop-filter: blur(14px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ─── Sidebar ─── */
+html.dark aside.nextra-sidebar-container {
+  background-color: #000000 !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+html.dark .nextra-sidebar-container a {
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+html.dark .nextra-sidebar-container a.active,
+html.dark .nextra-sidebar-container li.active > a,
+html.dark .nextra-sidebar-container .nx-text-primary-600 {
+  color: #39ff14 !important;
+  background-color: rgba(57, 255, 20, 0.08) !important;
+}
+
+/* ─── TOC (right sidebar) ─── */
+html.dark .nextra-toc {
+  background-color: transparent;
+}
+
+html.dark .nextra-toc a:hover {
+  color: #39ff14 !important;
+}
+
+html.dark .nextra-toc a.nx-text-primary-600 {
+  color: #39ff14 !important;
+}
+
+/* ─── Main content links ─── */
+html.dark main a:not(.nextra-sidebar-container a):not(.nextra-toc a) {
+  color: #39ff14;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(57, 255, 20, 0.2);
+  transition: border-color 0.15s ease;
+}
+
+html.dark main a:not(.nextra-sidebar-container a):not(.nextra-toc a):hover {
+  border-bottom-color: #39ff14;
+}
+
+/* ─── Headings ─── */
+html.dark h1,
+html.dark h2,
+html.dark h3,
+html.dark h4,
+html.dark h5,
+html.dark h6 {
+  color: #ffffff !important;
+  letter-spacing: -0.01em;
+}
+
+html.dark h1 {
+  font-weight: 800;
+}
+
+/* Heading anchor hover — green instead of default gray */
+html.dark h2:hover a,
+html.dark h3:hover a,
+html.dark h4:hover a {
+  color: #39ff14 !important;
+}
+
+/* ─── Inline code ─── */
+html.dark :not(pre) > code {
+  background-color: rgba(57, 255, 20, 0.08) !important;
+  color: #39ff14 !important;
+  border: 1px solid rgba(57, 255, 20, 0.15);
+  border-radius: 4px;
+  padding: 0.15em 0.4em;
+  font-size: 0.875em;
+}
+
+/* ─── Code blocks ─── */
+html.dark pre,
+html.dark .nextra-code-block pre {
+  background-color: #0a0a0a !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 8px;
+}
+
+html.dark pre code {
+  color: #ededed !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+/* Syntax highlighting tweaks for darker vibe */
+html.dark .shiki,
+html.dark code[class*="language-"] {
+  background-color: #0a0a0a !important;
+}
+
+/* ─── Tables ─── */
+html.dark table {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark th {
+  background-color: #0a0a0a !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark td {
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+html.dark tr:hover td {
+  background-color: rgba(57, 255, 20, 0.03) !important;
+}
+
+/* ─── Blockquotes ─── */
+html.dark blockquote {
+  border-left-color: #39ff14 !important;
+  background-color: rgba(57, 255, 20, 0.04) !important;
+  border-radius: 0 6px 6px 0;
+}
+
+/* ─── Callouts (Nextra's built-in) ─── */
+html.dark .nextra-callout {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background-color: #0a0a0a !important;
+}
+
+/* ─── Horizontal rules ─── */
+html.dark hr {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* ─── Cards / feature boxes on the landing page ─── */
+html.dark .nextra-card,
+html.dark .nx-rounded-lg.nx-border {
+  background-color: #0a0a0a !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark .nextra-card:hover {
+  border-color: rgba(57, 255, 20, 0.3) !important;
+  box-shadow: 0 0 24px rgba(57, 255, 20, 0.06);
+}
+
+/* ─── Search box ─── */
+html.dark .nextra-search input,
+html.dark input[type="search"] {
+  background-color: #0a0a0a !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #ededed;
+}
+
+html.dark .nextra-search input:focus,
+html.dark input[type="search"]:focus {
+  border-color: rgba(57, 255, 20, 0.4) !important;
+  box-shadow: 0 0 0 3px rgba(57, 255, 20, 0.1);
+  outline: none;
+}
+
+/* ─── Footer ─── */
+html.dark .nextra-footer,
+html.dark footer {
+  background-color: #000000 !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ─── Scrollbar (Webkit) ─── */
+html.dark ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html.dark ::-webkit-scrollbar-track {
+  background: #000000;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(57, 255, 20, 0.3);
+}
+
+/* ─── Selection ─── */
+html.dark ::selection {
+  background-color: rgba(57, 255, 20, 0.3);
+  color: #ffffff;
+}
+
+/* ─── Focus ring (accessibility — green, not blue) ─── */
+html.dark *:focus-visible {
+  outline: 2px solid #39ff14;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
