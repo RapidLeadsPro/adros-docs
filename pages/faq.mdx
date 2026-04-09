@@ -1,0 +1,224 @@
+---
+title: FAQ & Troubleshooting
+description: Common questions, setup mistakes, and the foot-guns we've seen people hit. The fastest way to unstick yourself.
+---
+
+# FAQ & Troubleshooting
+
+The 15 most common questions and issues we've seen. If you're stuck, start here — the fix is probably one of these.
+
+## Connection & Setup
+
+### 404 on contract endpoints
+
+**Symptom:** Your worker or REST client hits `https://api.adros.ai/contract/spec` and gets a 404, so it falls back to a stub.
+
+**Cause:** You dropped the `/api/v1` prefix. **Every Adros REST route lives under `/api/v1/*`.**
+
+**Fix:** Your base URL must be:
+
+```
+✅ https://api.adros.ai/api/v1
+❌ https://api.adros.ai
+```
+
+Every example in the [Contract Layer](/integrations/contract-layer) doc shows the full prefix. If you're reading a tutorial that omits it, the tutorial is wrong. Check your `ADROS_BASE_URL` environment variable.
+
+### 401 Unauthorized on every call
+
+**Symptom:** Every tool call returns `401 Unauthorized`.
+
+**Cause:** Usually one of three:
+
+1. **Wrong header name.** MCP uses `X-User-Token`, REST uses `Authorization: Bearer`. They're different.
+2. **Token typo.** The `lyr_` prefix is part of the token — don't strip it.
+3. **Token rotated.** If you regenerated your token in Settings, the old one stops working immediately. Update every client that uses it.
+
+**Fix:** Pull a fresh token from [app.adros.ai/settings](https://app.adros.ai) and verify with:
+
+```bash
+curl -H "Authorization: Bearer lyr_YOUR_TOKEN" \
+  "https://api.adros.ai/api/v1/contract/specs?stage=optimizing"
+```
+
+If that returns 200 with JSON, the token works. If it still 401s, the token is wrong.
+
+### Claude Desktop shows 0 tools after adding Adros
+
+**Cause:** Transport type misconfigured. Adros uses Streamable HTTP, not stdio.
+
+**Fix:** Your `claude_desktop_config.json` entry must use the `url` field (HTTP), not `command` (stdio):
+
+```json
+{
+  "mcpServers": {
+    "adros": {
+      "url": "https://api.adros.ai/mcp",
+      "headers": { "X-User-Token": "lyr_YOUR_TOKEN" }
+    }
+  }
+}
+```
+
+Restart Claude Desktop fully (quit, not just close window). The hammer icon at the bottom of the chat input should show 74 tools from Adros.
+
+### Cursor can't find Adros tools
+
+**Fix:** Cursor's MCP integration is still evolving. Make sure:
+
+1. You're on **Cursor 0.50+** (earlier versions had MCP issues)
+2. MCP is enabled in **Settings → Features → MCP**
+3. Server type is set to **`http`**, not `stdio`
+4. You've restarted Cursor after adding the config
+
+If tools still don't load, check `~/.cursor/mcp-logs/` for errors.
+
+---
+
+## Monitoring & Webhooks
+
+### My daily email says "frequency 1.38, CTR dropped 0%" — is my ad actually broken?
+
+**The alert copy was wrong (fixed in April 2026).** The old monitor code was reading `ad_name` and `ctr_change_pct` from the fatigue detector result dict, but those keys didn't exist — the real keys are `entity_name` and `ctr_change_wow`. Every alert defaulted to "Ad" (generic name) and "0%" (default value).
+
+**What it should say now:** the actual signal that tripped the alert — e.g., *"CPA rose 48.2% week-over-week — performance declining"* — not a hardcoded "CTR dropped X%" string.
+
+**If you're still seeing old-style alerts**, force a manual refresh:
+
+```bash
+curl -X POST -H "Authorization: Bearer lyr_YOUR_TOKEN" \
+  "https://api.adros.ai/api/v1/me/monitoring/run-now"
+```
+
+The response includes the full issues list inline so you can verify the new copy format.
+
+### An ad is flagged for fatigue but frequency is only 1.4
+
+**Fatigue has three triggers, not just frequency.** The detector flags an ad if ANY of these fire:
+
+1. **Frequency** ≥ 2.5 (early warning), ≥ 3.0 (fatigue), ≥ 4.0 (critical)
+2. **CTR decline** week-over-week beyond thresholds
+3. **CPA rise** ≥ critical threshold
+4. **CPM rise** ≥ 25%
+
+So an ad with frequency 1.4 but CPA up 48% week-over-week will show up as "fatigued" — the signal list in the alert tells you which metric tripped it.
+
+### Daily webhook never fires even though I configured the URL
+
+**Check three things:**
+
+1. **Plan tier.** Monitoring only runs for `pro`, `pro_annual`, or `trial` accounts. Free tier doesn't get the daily monitor.
+2. **Connected accounts.** The monitor skips users with no Meta OR Google ad account tokens stored.
+3. **Healthy run = silent.** If all 6 checks pass with zero issues, the monitor sends NO webhook (and no email). You'll only hear from it when something's wrong.
+
+To force a test run regardless: `POST /api/v1/me/monitoring/run-now`.
+
+### HMAC signature doesn't verify on my webhook receiver
+
+**Common mistake:** not using `sort_keys=True` when serializing the JSON body before computing HMAC. Adros signs `json.dumps(payload, sort_keys=True).encode("utf-8")`. Your verifier must match exactly.
+
+```python
+import hmac, hashlib, json
+
+def verify(body_bytes: bytes, signature_header: str, secret: str) -> bool:
+    # signature_header looks like "sha256=<hex>"
+    expected = "sha256=" + hmac.new(
+        secret.encode("utf-8"),
+        body_bytes,
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature_header)
+```
+
+Hash the **raw request body bytes** exactly as received. Don't re-serialize on your side — you'll get a different key order.
+
+---
+
+## Creative Generation
+
+### `generate_creative` returns the same image twice
+
+**By design.** Adros has a **60-second idempotency cache** on `generate_creative` keyed on `hash(prompt[:200] + user_id + aspect_ratio)`. Two calls within 60s with the same prompt return the same image to prevent retry-storm duplicates.
+
+**If you want a new image**, change the prompt (even trivially) or wait 60 seconds.
+
+### `generate_creative` returns 429 Too Many Requests
+
+**Rate limit:** 20 calls per hour per user. Hit that and you get 429 until the hour rolls over.
+
+**Fix:** Check `recall_creative_history` first — you might be regenerating variations you already have. Or wait. The limit is deliberately low to keep costs sane.
+
+### Image looks generic / off-brand
+
+**Almost always a `build_creative_prompt` issue, not a generation issue.** Three checks:
+
+1. **Are you using `mode='bold'`?** Default is `autonomous` which is literal/safe. `bold` produces editorial, scroll-stopping output.
+2. **Are you using `auto_select=True`?** Without it, the prompt doesn't anchor to a pattern's `image_generation_prompt` field — you lose the moat.
+3. **Have you uploaded brand assets?** If the client's DAM is empty, the prompt has no logo/colors/fonts to inject. Call `build_brand_profile(url)` first.
+
+Canonical call:
+
+```python
+prompt = build_creative_prompt(
+    client_name="ToonieTours",
+    auto_select=True,
+    mode="bold",
+)
+image = generate_creative(
+    prompt=prompt,
+    generator="nano_banana_pro",
+)
+```
+
+---
+
+## Data & Memory
+
+### `get_business_context` returns empty for a client I know I saved
+
+**Client scoping is strict.** If you saved context with `client_id=<uuid>` (agency mode) but read it with `client_id=None` (solo mode), you'll get an empty result. They're different rows.
+
+**Fix:** Always pass the same `client_id` (or consistently `None` for solo) across save and read. The `_client_filter` helper enforces this — mixing them creates ghost data.
+
+### `recall_weekly_log` returns nothing after successful writebacks
+
+Same scoping issue. Check that the `client_id` you used in `contract_writeback` matches the one you're passing to `recall_weekly_log`.
+
+Also: `recall_weekly_log` defaults to `weeks_back=2`. If your writebacks are older than that, bump it to `weeks_back=8`.
+
+### Pattern DB doesn't show `enrichment_metadata` field
+
+**Intentional.** `enrichment_metadata` and `image_generation_prompt` are stripped from the `PatternDetail` Pydantic schema to prevent scraping — they're the moat. They ARE available to MCP calls (via `get_blueprint`), just not to public REST schemas.
+
+---
+
+## Account & Billing
+
+### Connected Meta account "expired" silently
+
+**Meta access tokens have a ~60 day lifetime.** Adros has a background service (`token_refresh_service.py`) that refreshes them proactively, but if a client revokes permission in their Business Settings, the refresh fails too. The monitor then silently skips that check.
+
+**Fix:** Reconnect from [app.adros.ai/settings](https://app.adros.ai). Adros doesn't currently alert you proactively on lost access — that's a known gap being fixed.
+
+### Lead Gen ads fail with "TOS not accepted" even though I accepted
+
+**Meta Lead Gen TOS is per-app per-page.** Accepting Adros on one Page doesn't carry over to other Pages. The client must add the Adros Business App ID to their Business Manager as a partner, OR accept TOS on each individual Page.
+
+This is a Meta limitation, not an Adros bug. There's no way to accept TOS "globally."
+
+### Credits exhausted mid-session
+
+The `CreditGateMCPApp` middleware hard-blocks tool calls when `credits_used >= monthly_credits`. You'll get an explicit error, not a silent fail.
+
+**Fix:** Upgrade plan at [app.adros.ai/billing](https://app.adros.ai), or wait for monthly reset.
+
+---
+
+## Still stuck?
+
+- **Check the [Technical Overview](/integrations/overview)** — every known foot-gun is documented in section 11
+- **Check the [Integration Notes](/integrations/integration-notes)** — 7 architectural blind spots for anyone wiring Adros into orchestration
+- **Check your token works:** `curl -H "Authorization: Bearer lyr_YOUR_TOKEN" "https://api.adros.ai/api/v1/contract/specs"`
+- **Check Railway status:** if Adros itself is down (rare), every call returns 5xx — not your fault
+
+For anything not covered here, the [Technical Overview](/integrations/overview) is the source of truth on how Adros actually behaves.

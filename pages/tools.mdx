@@ -1,0 +1,252 @@
+---
+title: Tool Catalog
+description: All 74 Adros MCP tools grouped by category — pattern matching, memory, creative generation, Meta Ads, Google Ads, keyword research, workflow guides, optimization.
+---
+
+# Tool Catalog
+
+Adros exposes **74 MCP tools** via Streamable HTTP at `https://api.adros.ai/mcp`. Every tool accepts a `user_token` parameter (auto-injected from the MCP context if present).
+
+This page is grouped by category. Click any category to see all tools and their purposes.
+
+> Looking for how to connect? See the [Quickstart](/quickstart). Looking for the technical deep dive? See the [Technical Overview](/integrations/overview).
+
+---
+
+## Pattern & Strategy (6 tools)
+
+The moat. Tools that surface and apply the 4,022-pattern database.
+
+| Tool | Purpose |
+|---|---|
+| `search_patterns` | Search the pattern DB by filters (industry, awareness stage, format, etc.) |
+| `get_blueprint` | Fetch a single pattern's full blueprint (copy framework, visual specs, psychology) by `pattern_id` or `slug` |
+| `match_strategy` | Recommend top N patterns for a given `(industry, awareness_stage, risk_tolerance)` combination |
+| `list_industries` | List all industries the pattern DB covers (reference data) |
+| `get_taxonomy` | Return the full taxonomy tree (17 creative styles × 45 copy frameworks × 5 awareness stages × 4 alignment categories) |
+| `log_deployment` | Record which pattern was deployed to which campaign (used to track `times_deployed` + `performance_score`) |
+
+---
+
+## Memory & Context (11 tools)
+
+The institutional brain. Business context, personas, action logs, pattern-level history.
+
+| Tool | Purpose |
+|---|---|
+| `save_business_context` | Persist a client's business profile (name, USP, competitors, constraints, budget, goals) |
+| `get_business_context` | Load business profile for the current client (first call every session) |
+| `save_persona` | Save a customer persona (name, age, pain points, desires, objections, language) |
+| `get_personas` | List all personas for a client |
+| `log_weekly_action` | Append an event to the `weekly_logs` action stream (every specialist action goes here) |
+| `recall_weekly_log` | Fetch recent actions for a client (`weeks_back=4` is a good default) |
+| `update_log_result` | Attach a result/metric update to an existing log row |
+| `recall_creative_history` | Get past creative tests for a client (hook types, visual styles, winners, losers) |
+| `list_clients` | List all clients under the current user account |
+| `autooptimize_session_check` | Check for overdue experiments + compliance blocks + ecosystem alerts at session start |
+| `schedule_optimization_review` | Schedule a future review for a newly deployed change (7 days default) |
+
+---
+
+## Creative Pipeline (8 tools)
+
+The generation layer. Anchored to the pattern DB, powered by Nano Banana Pro (Gemini 2.5).
+
+| Tool | Purpose |
+|---|---|
+| `ideate_creative_concepts` | Generate N bold creative concept ideas using the Creative Divergence Engine (5 archetypes) |
+| `build_creative_prompt` | Compose a full Nano Banana Pro prompt by merging pattern blueprint + brand + business context + persona (use `auto_select=True` and `mode='bold'`) |
+| `generate_creative` | Generate an image from a prompt. **Always `generator='nano_banana_pro'`**. 60s idempotency cache + 20/hr rate limit |
+| `edit_creative` | Iterate on a generated image with a refinement prompt |
+| `validate_creative` | Post-generation QA pass — does it match the brief, brand, compliance? |
+| `verify_visual_reference` | Verify a reference image before it gets sent to Gemini |
+| `analyze_creative_style` | Analyze the style of an external creative (for pattern extraction / inspiration) |
+| `save_external_creative` | Save a competitor or inspiration creative into your DAM |
+
+---
+
+## Brand & DAM (2 tools)
+
+Brand asset extraction and storage.
+
+| Tool | Purpose |
+|---|---|
+| `upload_brand_asset` | Upload a logo, color palette, font file, or product photo to the client's DAM |
+| `build_brand_profile` | Crawl a client's website and auto-extract colors, fonts, logo, tone — saves directly to DAM |
+
+---
+
+## Workflow Guides & Intake (3 tools)
+
+The authoritative marketing playbooks. Every specialist calls these before executing work.
+
+| Tool | Purpose |
+|---|---|
+| `get_workflow_guide` | Fetch the full playbook for a workflow type (9 workflows — see below) |
+| `get_output_template` | Fetch the `.xlsx` template spec for a given deliverable type |
+| `get_intake_questions` | Fetch the structured intake question flow for a workflow |
+
+**The 9 workflows:** `keyword_research`, `market_research`, `meta_campaign_build`, `meta_audit`, `google_campaign_build`, `google_audit`, `creative_only`, `campaign_launch`, `optimization`.
+
+---
+
+## Landing Page (1 tool)
+
+| Tool | Purpose |
+|---|---|
+| `audit_landing_page` | Analyze a landing page for speed, mobile, SEO, CRO issues against target keywords + platform |
+
+---
+
+## Meta Ads Read (21 tools)
+
+Read the full Meta Ads hierarchy: accounts → campaigns → ad sets → ads → creatives → insights. Plus targeting research.
+
+| Tool | Purpose |
+|---|---|
+| `list_ad_accounts` | List all Meta ad accounts the user has access to |
+| `read_ad_account` | Get full detail on one ad account |
+| `list_campaigns` | List campaigns for an ad account |
+| `read_campaign` | Get full detail on one campaign |
+| `list_ad_sets` | List ad sets under a campaign |
+| `read_ad_set` | Get full detail on one ad set |
+| `list_ads` | List ads under an ad set |
+| `read_ad` | Get full detail on one ad |
+| `list_ad_creatives` | List ad creatives for an ad account |
+| `read_ad_creative` | Get full detail on one creative (includes `video_id`) |
+| `list_ad_previews` | Generate preview HTML for one or more ads |
+| `list_insights` | Pull performance metrics at any level (campaign / ad_set / ad) with breakdowns + date ranges |
+| `search_interests` | Search Meta's interest taxonomy for targeting IDs |
+| `suggest_interests` | Get Meta-suggested interests similar to your seed list |
+| `estimate_audience_size` | Estimate reach for a given `targeting_spec` |
+| `search_behaviors` | Search Meta's behaviors taxonomy |
+| `search_demographics` | Search Meta's demographics taxonomy |
+| `search_geo_locations` | Look up Meta geo location IDs (countries, cities, ZIPs) |
+| `search_ads_archive` | Spy on competitor ads via Meta Ad Library |
+| `search_pages` | Search Facebook Pages |
+| `list_account_pages` | List Pages connected to a Meta ad account |
+
+---
+
+## Meta Ads Write (14 tools)
+
+Create, update, clone, and deploy to Meta.
+
+| Tool | Purpose |
+|---|---|
+| `create_campaign` | Create a new Meta campaign |
+| `update_campaign` | Update an existing campaign |
+| `create_ad_set` | Create a new ad set |
+| `update_ad_set` | Update an existing ad set |
+| `create_ad_creative` | Create an ad creative (copy + image/video + CTA + URL) |
+| `create_ad` | Create an ad from an existing creative + ad set |
+| `update_ad` | Update an existing ad |
+| `upload_ad_image` | Upload an image to the Meta image library |
+| `clone_campaign` | Duplicate a campaign (useful for A/B variants) |
+| `clone_ad_set` | Duplicate an ad set |
+| `clone_ad` | Duplicate an ad |
+| `create_custom_audience` | Create a Custom Audience (email list, pixel event, etc.) |
+| `create_lookalike_audience` | Create a Lookalike from a source audience |
+| `create_report` | Queue an async Meta insights report |
+
+Also available: `create_multi_variant_creative` — builds an `asset_feed_spec` creative with up to 5 headlines, 5 primary texts, 5 descriptions, and 10 images/videos. This is what the `meta_campaign_build` workflow uses for DCO setups.
+
+---
+
+## Keyword Research (5 tools)
+
+Backed by DataForSEO. Credit-metered per call.
+
+| Tool | Purpose |
+|---|---|
+| `research_keywords` | Expand seed keywords into a full keyword universe with volume, CPC, competition |
+| `get_keyword_metrics` | Get search volume + CPC + competition for a specific list of keywords |
+| `get_keywords_for_site` | Extract the keywords a competitor's site ranks for |
+| `find_serp_competitors` | Find the top-ranking domains for a keyword (discover competitors) |
+| `find_negative_keyword_candidates` | Suggest negative keywords based on search term patterns |
+
+Also: `competitor_gap` — find keywords your competitors rank for that you don't.
+
+---
+
+## Google Ads (27 tools)
+
+Full Google Ads API coverage via the `google-ads` Python SDK.
+
+**Read:**
+
+| Tool | Purpose |
+|---|---|
+| `list_google_customers` | List all Google Ads customer IDs (including MCC accounts) |
+| `get_google_customer_info` | Get full detail on one customer |
+| `list_google_campaigns` | List campaigns for a customer |
+| `get_google_campaign` | Get full detail on one campaign |
+| `list_google_keywords` | List keywords in a campaign |
+| `list_google_negative_keywords` | List negative keywords in a campaign |
+| `list_google_ads` | List ads in a campaign |
+| `list_google_assets` | List assets (headlines, descriptions, images, videos) |
+| `list_google_bidding_strategies` | List bidding strategies available |
+| `google_campaign_performance_report` | Campaign-level performance (impressions, clicks, conversions, cost) |
+| `google_keyword_performance_report` | Keyword-level performance |
+| `google_search_terms_report` | Search terms that triggered your ads (the raw user queries) |
+| `google_quality_score_report` | Quality Score by keyword |
+| `google_auction_insights_report` | Auction insights (impression share, overlap, position) |
+
+**Write:**
+
+| Tool | Purpose |
+|---|---|
+| `create_google_campaign` | Create a new Google Ads campaign |
+| `set_google_campaign_status` | Pause / enable / remove a campaign |
+| `add_google_keywords` | Add keywords to an ad group |
+| `update_google_keyword` | Update a keyword's bid or status |
+| `add_google_negative_keywords` | Add negatives to an ad group or campaign |
+| `create_google_responsive_search_ad` | Create an RSA (up to 15 headlines + 4 descriptions) |
+| `create_google_sitelinks` | Create sitelink assets |
+| `create_google_callouts` | Create callout assets |
+| `create_google_structured_snippet` | Create a structured snippet asset |
+| `create_google_image_asset` | Upload an image asset |
+| `create_google_video_asset` | Upload a video asset |
+| `link_google_asset_to_campaign` | Link an asset (sitelink, callout, image, etc.) to a campaign |
+| `set_google_campaign_bidding_strategy` | Change a campaign's bidding strategy |
+
+Plus the escape hatch: `execute_gaql` — run any valid GAQL query against the customer's account.
+
+---
+
+## Contract Layer (5 tools)
+
+The bridge between Adros and your orchestration stack. Deterministic deliverable specs + writeback + state machine.
+
+| Tool | Purpose |
+|---|---|
+| `get_deliverable_spec` | Fetch the structured playbook for a `(stage, task_type)` pair — what to produce, what data to pull, when to escalate to Sam |
+| `list_deliverable_specs` | List all available specs, optionally filtered by stage |
+| `contract_writeback` | Push structured findings from a completed task back into `business_context.raw_research` + append to `weekly_logs` |
+| `get_client_state` | Get a client's current lifecycle state (`new → intake → research → creative → approved → live → optimizing → paused`) |
+| `set_client_state` | Transition a client to a new lifecycle state (records audit trail in `weekly_logs`) |
+
+See [Contract Layer](/integrations/contract-layer) for the full integration spec.
+
+---
+
+## Auth, rate limits, idempotency
+
+- **Auth:** every tool resolves a user from `X-User-Token` header (MCP) or `user_token` parameter
+- **Credit gating:** `CreditGateMCPApp` middleware hard-blocks tool calls when the user's `credits_used >= monthly_credits`
+- **Rate limiting:** `generate_creative` capped at **20/hour/user**
+- **Idempotency:** `generate_creative` has a **60-second cache** on `hash(prompt[:200] + user_id + aspect_ratio)` to prevent duplicate images from retry storms
+- **Logging:** every tool call is logged via `AutoLogMCPApp` middleware for billing + audit
+
+---
+
+## What's NOT a tool
+
+Some Adros functionality is NOT exposed via MCP — it runs automatically:
+
+- **Daily monitor** (6 health checks at 8am SGT) — runs server-side, emits webhook + email
+- **Token refresh** (Meta + Google OAuth) — runs hourly in the background
+- **Email sequences** (win-back, credit re-engagement) — hourly loops
+- **Creative idempotency cache eviction** — 60s automatic
+
+These are listed in the [Technical Overview](/integrations/overview) background loops section.

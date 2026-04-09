@@ -1,0 +1,147 @@
+---
+title: Quickstart
+description: Connect Adros to your AI tool in under 3 minutes. Step-by-step setup for Claude Desktop, Cursor, Paperclip/OpenClaw, and any MCP-compatible client.
+---
+
+# Quickstart
+
+Get Adros running in your AI tool in **under 3 minutes**. Same Adros brain, any client.
+
+## What you need first
+
+1. **An Adros account.** Sign up at [app.adros.ai](https://app.adros.ai). Free tier gives you a working MCP token for testing.
+2. **Your MCP token.** From the dashboard → **Settings → MCP** → copy the `lyr_...` token. Treat it like a password — anyone with this token can call Adros as you.
+3. **At least one connected ad account** (optional for now, required for any real work). Connect Meta and/or Google Ads from the dashboard once you're in.
+
+**MCP endpoint:** `https://api.adros.ai/mcp`
+
+---
+
+## Claude Desktop
+
+The fastest path — Claude Desktop natively supports MCP over Streamable HTTP.
+
+**1. Open your Claude Desktop config:**
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+**2. Add Adros to the `mcpServers` section:**
+
+```json
+{
+  "mcpServers": {
+    "adros": {
+      "url": "https://api.adros.ai/mcp",
+      "headers": {
+        "X-User-Token": "lyr_YOUR_TOKEN_HERE"
+      }
+    }
+  }
+}
+```
+
+**3. Restart Claude Desktop.** You should see a hammer icon at the bottom of the chat input — click it to verify Adros tools are loaded. You should see 74 tools.
+
+**4. Test it.** In a new chat, say:
+> *"Use Adros to list my clients and tell me which ones are in 'optimizing' state."*
+
+Claude will call `list_clients` + `get_client_state` automatically.
+
+---
+
+## Cursor
+
+Cursor added native MCP support in late 2025.
+
+**1. Open Cursor Settings → Features → MCP.**
+
+**2. Click "Add new MCP server":**
+- **Name:** `adros`
+- **Type:** `http` (Streamable HTTP, not stdio)
+- **URL:** `https://api.adros.ai/mcp`
+- **Headers:** `X-User-Token: lyr_YOUR_TOKEN_HERE`
+
+**3. Save and restart Cursor.** The tools will be available in Composer and Chat.
+
+**4. Test in Composer:**
+> *"Audit my Meta ads for creative fatigue using Adros."*
+
+---
+
+## OpenClaw / Paperclip
+
+If you're running OpenClaw as your agent orchestration layer, add Adros as an MCP server in your `~/.openclaw/config.yaml` (or equivalent):
+
+```yaml
+mcp_servers:
+  adros:
+    transport: streamable_http
+    url: https://api.adros.ai/mcp
+    headers:
+      X-User-Token: lyr_YOUR_TOKEN_HERE
+```
+
+Also set an environment variable so your Python workers can hit the REST API directly:
+
+```bash
+# ~/.openclaw/.env
+ADROS_BASE_URL=https://api.adros.ai/api/v1
+ADROS_API_KEY=lyr_YOUR_TOKEN_HERE
+```
+
+> ⚠️ **Important:** the REST base URL MUST include `/api/v1` at the end. Without it, every call returns 404. See [Troubleshooting](/faq#404-on-contract-endpoints) for the most common setup mistake.
+
+---
+
+## Any MCP-compatible client
+
+Adros speaks **Streamable HTTP MCP** (spec version `2025-03-26`). Any MCP client that supports this transport will work.
+
+**Connection parameters:**
+
+| Field | Value |
+|---|---|
+| Transport | `streamable_http` |
+| URL | `https://api.adros.ai/mcp` |
+| Auth header | `X-User-Token: lyr_YOUR_TOKEN_HERE` |
+| Spec version | `2025-03-26` |
+
+---
+
+## Raw curl test (no client needed)
+
+If you want to verify your token works before setting up a client, hit a REST endpoint directly:
+
+```bash
+curl -H "Authorization: Bearer lyr_YOUR_TOKEN_HERE" \
+  "https://api.adros.ai/api/v1/contract/specs?stage=optimizing"
+```
+
+**Expected response:** JSON with `"schema_version":"v1"` and `"total":4`.
+
+If you get a `401` — token is wrong.
+If you get a `404` — you probably dropped the `/api/v1` prefix.
+If you get a `200` with real data — you're connected.
+
+---
+
+## Next steps
+
+- **Read the [Technical Overview](/integrations/overview)** to understand what Adros actually does (4,022 patterns, 74 tools, daily monitor, contract layer).
+- **Browse the [Tool Catalog](/tools)** to see every MCP tool grouped by category.
+- **Skim the [FAQ](/faq)** for the 5 most common setup mistakes.
+- **Go to [app.adros.ai](https://app.adros.ai)** and connect your Meta + Google Ads accounts so Adros has data to work with.
+
+---
+
+## Troubleshooting the first connection
+
+| Symptom | Most likely cause |
+|---|---|
+| `401 Unauthorized` | Token is wrong, expired, or missing `X-User-Token` header |
+| `404 Not Found` on REST | Base URL missing `/api/v1` prefix |
+| `0 tools` in Claude Desktop | Transport type set to `stdio` instead of Streamable HTTP |
+| `Connection refused` | Network / firewall blocking `api.adros.ai` |
+| Tools appear but calls fail | Meta/Google account not yet connected in the dashboard |
+
+See the full [FAQ / Troubleshooting](/faq) page for deeper fixes.

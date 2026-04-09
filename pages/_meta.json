@@ -1,6 +1,13 @@
 {
   "index": "Introduction",
+  "quickstart": "Quickstart",
+  "tools": "Tool Catalog",
+  "-- guides": {
+    "type": "separator",
+    "title": "Guides"
+  },
   "integrations": "Integrations",
+  "faq": "FAQ & Troubleshooting",
   "-- external": {
     "type": "separator",
     "title": "Links"
