@@ -1,15 +1,14 @@
 # Adros Technical Overview
 
-**Audience:** OpenClaw (Jarvis/Paperclip coder)
-**Author:** Adros side (Claude Code — verified against repo at `c:\Cursor Projects\Adros\adros`)
-**Date:** 2026-04-08
+**Audience:** Engineers and AI agent builders integrating with Adros
+**Author:** Adros team
 **Adros version:** 0.3.0
 
-> **Rule of reading:** every fact in this doc was pulled from the live repo, not memory. File references point to the authoritative location if you need to dig deeper.
+> **Rule of reading:** every fact in this doc maps to the live production system. If anything here drifts from what Adros actually does, this doc is wrong and should be updated.
 >
 > **Companion docs:**
-> - `ADROS-INTEGRATION-NOTES-FOR-OPENCLAW.md` — integration blind spots + 5 open decisions
-> - `ADROS-ONBOARDING-FLOWS.md` — Journey A (fresh client) vs Journey B (existing ad account), Manus bridge contract
+> - [Integration Notes](/integrations/integration-notes) — integration blind spots + open decisions for orchestration-layer builders
+> - [Onboarding Flows](/integrations/onboarding-flows) — Journey A (fresh client) vs Journey B (existing ad account), research-lane bridge contract
 
 ---
 
@@ -335,9 +334,9 @@ Every marketing task Adros handles is one of these 9 workflows. Specialists call
 
 Each workflow dict has: `name`, `trigger`, `description`, `platforms[]`, `mcp_servers[]`, `fallback_strategy`, `phases[]` (ordered, with `steps[]`, `tools[]`, `memory[]`), `outputs[]`, `memory_actions[]`.
 
-Many phases include **`USER CHECKPOINT:` markers** — these are explicit "stop and wait for Sam's approval" gates. Jarvis should honor these as approval pauses, not silently continue.
+Many phases include **`USER CHECKPOINT:` markers** — these are explicit "stop and wait for human approval" gates. Orchestration layers should honor these as approval pauses, not silently continue.
 
-**Key insight for OpenClaw:** client onboarding is **not a new workflow** — it's a chained sequence of these 9. See `ADROS-ONBOARDING-FLOWS.md` for how Journey A and Journey B chain them.
+**Key insight:** client onboarding is **not a new workflow** — it's a chained sequence of these 9. See [Onboarding Flows](/integrations/onboarding-flows) for how Journey A and Journey B chain them.
 
 ---
 
@@ -623,6 +622,6 @@ If any of these drift, re-verify against the live repo. I'll update this doc whe
 - **Creative pipeline:** always `mode='bold'` + `nano_banana_pro`, 60s idempotency + 20/hr rate limit.
 - **Memory layer:** business_context + personas + weekly_logs, scoped by (user_id, client_id) where `client_id=NULL` is solo.
 - **Pattern moat:** 4,022 patterns with enrichment_metadata + image_generation_prompt hidden from public schemas.
-- **Five new endpoints** still need to be built for onboarding + monthly reports (see ONBOARDING-FLOWS §7).
+- **Five new endpoints** still need to be built for onboarding + monthly reports (see [Onboarding Flows §7](/integrations/onboarding-flows)).
 
-— Claude Code (Adros side, verified against live repo)
+— Adros team

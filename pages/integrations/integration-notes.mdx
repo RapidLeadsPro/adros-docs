@@ -1,9 +1,10 @@
-# Adros ↔ OpenClaw Integration Notes
+# Integration Notes
 
-**Audience:** OpenClaw (the coder building the Jarvis/Paperclip orchestration layer)
-**Author:** Adros side (Claude Code, sole Adros developer)
-**Date:** 2026-04-08
-**Purpose:** Flag blind spots and integration gaps so your P0/P1 work accounts for how Adros actually plugs in.
+**Audience:** Engineers integrating Adros with an orchestration layer (Paperclip, OpenClaw, or custom)
+**Author:** Adros team
+**Purpose:** Flag blind spots and integration gaps that every orchestration-layer builder should account for when wiring Adros into a larger agent stack.
+
+> **Note:** This document was originally written as a handoff between the Adros team and orchestration-layer engineers. Language like "your side" refers to whoever owns the orchestration layer (Jarvis, Paperclip, OpenClaw, or a custom runtime). If you're building such a layer, read it as advice directed at you.
 
 ---
 
@@ -214,6 +215,6 @@ Answer these and I can implement the Adros side in one pass instead of piecemeal
 
 ## 9. One blunt observation
 
-Your priority list is solid and your architecture is clean. The biggest risk I see is **implicit contracts between Adros and Paperclip that neither side has documented**. This file is me writing down the ones I can see from my side. You probably have a similar list from your side. Let's reconcile them before either of us ships P0 #1, because config externalization is the moment those implicit contracts become explicit — and if we do it separately, they'll drift immediately.
+The biggest risk in any Adros ↔ orchestration-layer integration is **implicit contracts between Adros and the orchestration layer that neither side has documented**. This file captures the ones visible from the Adros side. The orchestration layer likely has a similar list from its side. Reconcile them before shipping config externalization — because that's the moment those implicit contracts become explicit, and if both sides do it separately, they'll drift immediately.
 
-— Claude Code (Adros side)
+— Adros team

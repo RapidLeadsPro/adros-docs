@@ -1,12 +1,11 @@
-# Adros Contract Layer — Integration Spec for OpenClaw
+# Adros Contract Layer
 
-**Audience:** OpenClaw (Jarvis/Paperclip side)
-**Author:** Adros side (Claude Code)
-**Date:** 2026-04-08
-**Status:** Built, ready to deploy. Awaiting Sam's deploy approval.
+**Audience:** Engineers wiring Adros into an orchestration layer
+**Author:** Adros team
+**Status:** Live on production (`api.adros.ai`). See [Quickstart](/quickstart) to connect.
 **Schema version:** v1
 
-> **Purpose:** Wire your Paperclip workers + Jarvis to call these endpoints so every specialist becomes deterministic. This is the C1 blocker from your `company-of-ai-architecture.md` doc, solved.
+> **Purpose:** Wire orchestration-layer workers (Paperclip, OpenClaw, custom) to call these endpoints so every specialist becomes deterministic — no guessing what to produce, no free-text handoffs, no drift between cycles.
 
 ---
 
@@ -290,40 +289,20 @@ This means specialists can call `get_business_context()` and immediately see "wh
 Every response includes `"schema_version": "v1"`. When we change the spec structure later, we'll bump to `v2` and your workers should refuse to process v2 specs until they're updated. **Pin your worker code to v1 for now** — easy migration later.
 
 ### Error responses
-- **404** if no spec exists for a (stage, task_type) pair → don't retry, log it, escalate
-- **400** if invalid lifecycle_state → log it, escalate
+- **404** if no spec exists for a `(stage, task_type)` pair → don't retry, log it, escalate
+- **400** if invalid `lifecycle_state` → log it, escalate
 - **401** if auth fails → check token, escalate
 
 ---
 
-## What I still need from you (Sam)
+## Known gotchas
 
-1. **Deploy approval** — say "deploy" and I push to Railway. Once deployed:
-   - Apply migration 021 via Supabase SQL editor (manual, takes 30 seconds)
-   - Restart the Adros API (automatic on Railway)
-   - Test endpoints with your existing token
-2. **Confirm OpenClaw is starting Day 1 work** — once endpoints are live
-3. **Pick the demo client order** — ToonieTours first, then Pranic? Or parallel?
+**Client resolution by name.** The `client_id` lookup in MCP tools uses an internal resolver that expects the client to already exist in Adros. If the orchestration layer creates a brand-new client and immediately tries to call `get_client_state(client_name=...)`, the resolver may return empty. Mitigation: create the client first via the dashboard or Adros API, then call Contract tools.
 
----
+**Base URL prefix.** All Contract REST endpoints live under `/api/v1/*`. Hitting `https://api.adros.ai/contract/spec` without the `/api/v1` prefix returns 404. See the [FAQ](/faq#404-on-contract-endpoints) for the most common setup mistake.
 
-## One thing I'm watching
-
-The `client_id` lookup in MCP tools uses `MemoryService.resolve_client_id(user.id, client_name)` which expects the client to already exist. If Jarvis creates a brand-new client (Pranic) via the MCP, that resolver may need to be checked. **Mitigation:** for the demo, both clients (ToonieTours, Pranic) already exist in the Adros DB, so this isn't a blocker. Worth flagging for post-demo.
+**Schema version pinning.** Every response includes `"schema_version": "v1"`. When Adros bumps to v2 in the future, workers should refuse v2 specs until they're updated. Pin your parsing logic to v1 explicitly and fail loud on version mismatch.
 
 ---
 
-## Files changed (Adros side, for your awareness)
-
-```
-api/db/migrations/021_client_lifecycle_state.sql      ← new
-api/models/client.py                                  ← +2 fields
-api/services/contract_service.py                      ← new (300 lines)
-api/routes/contract.py                                ← new (280 lines)
-api/main.py                                           ← +2 lines (router wiring)
-api/mcp_server.py                                     ← +280 lines (4 new MCP tools)
-```
-
-All files compile clean. No changes to existing routes, services, or models beyond the additive `Client` field.
-
-— Claude Code (Adros side)
+— Adros team

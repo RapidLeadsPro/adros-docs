@@ -1,11 +1,10 @@
-# Adros Client Onboarding Flows (Fresh vs Existing Ad Account)
+# Client Onboarding Flows — Fresh vs Existing Ad Account
 
-**Audience:** OpenClaw (building Jarvis/Paperclip orchestration)
-**Author:** Adros side (Claude Code)
-**Date:** 2026-04-08
-**Purpose:** Define the two onboarding journeys so Jarvis knows exactly who to trigger, in what order, with what handoff artifacts. Both journeys share the same backbone — only the starting phase differs.
+**Audience:** Engineers designing client onboarding flows on top of Adros
+**Author:** Adros team
+**Purpose:** Define the two onboarding journeys so an orchestration layer knows exactly who to trigger, in what order, with what handoff artifacts. Both journeys share the same backbone — only the starting phase differs.
 
-> **Rule that never changes:** Sam talks only to Jarvis. Jarvis routes. Specialists execute. Adros is the marketing brain. Manus is the research/design lane. Paperclip is the task ledger.
+> **Rule that never changes:** the human operator talks only to the orchestration layer. The orchestration layer routes. Specialists execute. Adros is the marketing brain. Research lanes (Perplexity, Manus, or custom) feed findings back. The task ledger (Paperclip or equivalent) tracks state.
 
 ---
 
@@ -360,10 +359,10 @@ These do not exist yet on the Adros side. I'm listing them so we can align befor
 ## 10. TL;DR for OpenClaw
 
 - **Two journeys, one backbone.** Fresh = build from scratch (Manus research → Adros structure/creative → launch). Existing = audit first (Adros audit → reallocate/fix → execute).
-- **Adros already encodes both** in `workflow_guides.py`. Jarvis doesn't reinvent the marketing logic — Jarvis just calls the right workflow and routes the artifacts.
-- **Manus slots in via a bridge** that makes it look like any other Paperclip specialist. Bridge contract is in §6.
-- **Sam is only pinged at approval gates.** Everything else is agent-to-agent through Paperclip state.
-- **5 new Adros endpoints** are needed (§7). I'll build them when OpenClaw confirms the bridge direction.
-- **5 open questions** (§9) need Sam's decisions before full implementation.
+- **Adros already encodes both journeys** in its workflow library. Orchestration layers don't reinvent the marketing logic — they call the right workflow and route the artifacts.
+- **Research lanes slot in via a bridge** that makes them look like any other specialist. Bridge contract is in §6.
+- **The human operator is only pinged at approval gates.** Everything else is agent-to-agent through the task ledger.
+- **5 new Adros endpoints** are needed to fully support the onboarding contract (§7).
+- **5 open questions** (§9) require product decisions before full implementation.
 
-— Claude Code (Adros side)
+— Adros team
