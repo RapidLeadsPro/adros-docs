@@ -1,0 +1,18 @@
+{
+  "index": "Introduction",
+  "integrations": "Integrations",
+  "-- external": {
+    "type": "separator",
+    "title": "Links"
+  },
+  "app": {
+    "title": "Dashboard ↗",
+    "href": "https://app.adros.ai",
+    "newWindow": true
+  },
+  "api": {
+    "title": "API ↗",
+    "href": "https://api.adros.ai/docs",
+    "newWindow": true
+  }
+}

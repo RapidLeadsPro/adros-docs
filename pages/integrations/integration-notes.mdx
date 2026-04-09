@@ -1,0 +1,219 @@
+# Adros ↔ OpenClaw Integration Notes
+
+**Audience:** OpenClaw (the coder building the Jarvis/Paperclip orchestration layer)
+**Author:** Adros side (Claude Code, sole Adros developer)
+**Date:** 2026-04-08
+**Purpose:** Flag blind spots and integration gaps so your P0/P1 work accounts for how Adros actually plugs in.
+
+---
+
+## 1. What Adros is (one paragraph)
+
+Adros AI is Sam's marketing automation backend (FastAPI on Railway, React frontend on Vercel, Supabase Postgres). It holds 4,022 enriched ad patterns, runs daily autonomous monitoring (6 checks at 8am SGT), and exposes an MCP server that specialists (Creative Director, Data Analyst, Hermes) use as their **strategy brain, memory, and optimization engine**. Adros is where the intelligence lives. Jarvis/Paperclip is where the *coordination* lives. Your job is orchestration; Adros' job is marketing cognition.
+
+---
+
+## 2. How Adros talks to your system today
+
+### 2.1 Outbound: Daily Monitoring Webhook (Adros → OpenClaw)
+
+**Trigger:** Daily cron at 8am SGT inside Adros backend
+**Endpoint:** Configured per-user in Adros Settings (points at your webhook receiver)
+**Auth:** HMAC-SHA256 signature in `X-Adros-Signature` header, secret stored in Adros `users.monitoring_webhook_secret`
+**Payload version:** v1.1
+
+**Payload shape (abbreviated):**
+```json
+{
+  "version": "1.1",
+  "source_run_id": "monitor_2026-04-08T00:00:00Z",
+  "generated_at": "2026-04-08T00:00:00Z",
+  "summary": {
+    "total_issues": 12,
+    "notify_sam_count": 3,
+    "affected_clients": ["ToonieTours", "Pranic Healing"],
+    "alert_types": {"creative_fatigue": 4, "search_term_waste": 6, "rsa_health": 2}
+  },
+  "issues": [
+    {
+      "dedupe_key": "a3f1b2c4d5e6f789",
+      "alert_type": "creative_fatigue",
+      "severity": "high",
+      "headline": "...",
+      "summary": "...",
+      "client_name": "ToonieTours",
+      "client_id": "<adros-uuid>",
+      "recommended_specialist": "creative_director",
+      "notify_sam": true,
+      "metrics": {...},
+      "timestamp": "2026-04-08T00:00:00Z"
+    }
+  ]
+}
+```
+
+**Dedupe:** `dedupe_key = sha256(alert_type + client_id + affected_entity)[:16]` — stable across runs, use this to suppress repeats.
+
+### 2.2 Inbound: Adros MCP (Specialists → Adros)
+
+Specialists (Creative Director, Hermes, Data Analyst) connect to Adros via MCP over Streamable HTTP. They call tools like `build_creative_prompt`, `generate_creative`, `match_strategy`, `list_insights`, `google_campaign_performance_report`, etc. Auth is per-user token resolved from MCP context.
+
+**This path does NOT go through your webhook.** It's pull-based: the specialist decides when to call Adros.
+
+---
+
+## 3. Blind spots in your P0 plan — things to fix or account for
+
+These map onto `docs/implementation-priority-list.md` items.
+
+### 3.1 BLIND SPOT: Adros doesn't know your `ALLOWED_CLIENT_NAMES`
+
+**Your P0 #1 (Externalize client config) and P0 #2 (Unknown-client suppression) are correct — but they currently only defend *downstream*. Adros is upstream and has no idea which clients are live in your system.**
+
+Concrete consequence:
+- Adros runs daily monitoring across **every client in its DB**, including dropped ones (APOL/`act_368004676` being the canonical example).
+- Adros sends webhook alerts for those clients.
+- Your webhook receiver then has to suppress them (which you're doing), but Adros has already burned Haiku tokens generating the alert text.
+
+**What I need from you:**
+- Decide whether Adros should **pull** your canonical client list (e.g., `GET /openclaw/active-clients` on your side) on each monitor run, OR
+- Whether you want Adros to **expose** `GET /me/clients/active` for you to sync from (Adros-side config externalization).
+
+Related: Adros currently has **no `is_active` flag** on the `clients` table. I can add one, but I need to know if OpenClaw is the source of truth or Adros is. **Pick one.** Don't let it drift.
+
+### 3.2 BLIND SPOT: Monitoring webhook is per-*user*, orchestration is per-*client*
+
+Adros' `users.monitoring_webhook_url` is scoped to one Adros user account. If multiple Adros users (agency setup) all point at the same OpenClaw webhook, your receiver will get overlapping alert streams with no clean tenant separation.
+
+**What I need from you:**
+- Confirm whether you want one canonical "ops account" on Adros that all monitoring flows through, or
+- Whether Adros should add a `webhook_tenant_id` field to payloads so you can route by tenant on your side.
+
+### 3.3 BLIND SPOT: Adros doesn't enforce your wakeup rule
+
+Your `docs/paperclip-wakeup-system.md` is clear: **assignment alone doesn't start specialists — wakeup is mandatory.** Adros' side doesn't know this. When a specialist calls `schedule_optimization_review` in Adros, Adros creates a pending experiment in its own DB but does **not** create a Paperclip issue or trigger wakeup.
+
+Consequence: experiments can sit pending in Adros forever if Paperclip isn't independently scheduling a review task.
+
+**What I need from you:**
+- Decide the contract: does Adros push a "review due" webhook when the scheduled date hits, or does Paperclip poll Adros `/me/optimization/due`?
+- Either way, whichever side creates the Paperclip issue **must also call wakeup**. Document this in your `assign_and_wake()` primitive (your P0 #4).
+
+### 3.4 BLIND SPOT: `schedule_optimization_review` has no Paperclip reminder loop
+
+Currently in Adros:
+1. Specialist calls `schedule_optimization_review(client_id, review_date)`
+2. Row created in `auto_optimize_experiments` with `status=pending`, `scheduled_for=<date>`
+3. Daily monitor's `session_start_check` will surface it **only if** it's already overdue
+
+Gap: between "created" and "overdue" there is no nudge. If you want proactive scheduling, either:
+- Adros emits a "review_due_soon" webhook 24h before scheduled_for, OR
+- Paperclip creates an issue at schedule time with a due date and handles its own reminders
+
+**Recommend option B** — keeps scheduling logic on your side where the humans operate.
+
+### 3.5 BLIND SPOT: Your hardcoded agent IDs vs Adros' user_token model
+
+Your `SETTINGS-AND-FILES-MAP.md` shows agent IDs hardcoded in `webhook.py` and `orchestrator.py`. That's fine for Paperclip. But when those agents call Adros MCP, **Adros authenticates by user_token, not by agent ID**. The mapping "this Paperclip agent = this Adros user" currently lives nowhere explicit.
+
+**What I need from you:**
+- Add a mapping table in your config externalization work (P0 #1):
+  ```yaml
+  agents:
+    hermes:
+      paperclip_id: 6711eb63-...
+      adros_user_token: <stored in ~/.openclaw/.env as ADROS_TOKEN_HERMES>
+    creative_director:
+      paperclip_id: dbced9b6-...
+      adros_user_token: <ADROS_TOKEN_CREATIVE_DIR>
+  ```
+- Without this, rotating an Adros user or onboarding a new specialist silently breaks MCP auth.
+
+### 3.6 BLIND SPOT: Dedupe lives in two places, uncoordinated
+
+Adros sends `dedupe_key` per issue. Your `adros-monitoring-state.json` also dedupes. If both sides dedupe with different keys/windows, you can end up with:
+- Adros thinks it's a new alert (different day, new dedupe)
+- OpenClaw thinks it's a duplicate (same content hash)
+- Or vice versa
+
+**What I need from you:**
+- Confirm you'll use Adros' `dedupe_key` as the authoritative dedupe identifier, AND
+- Tell me your dedupe window (24h? 7d?) so Adros can match it.
+
+### 3.7 BLIND SPOT: No health/heartbeat from Adros to your ops channel
+
+Your P1 #9 (internal ops alert channel) should include Adros liveness. Today, if Adros' daily cron dies silently, you won't know for 24h+. Options:
+- Adros sends a nightly "monitor_run_complete" heartbeat webhook even when zero issues
+- Your side alerts if no Adros heartbeat in 25h
+
+**I recommend the heartbeat approach.** Cheap to add on my side if you confirm you want it.
+
+---
+
+## 4. What's already solid (don't touch)
+
+- **HMAC signing:** Adros signs every webhook with HMAC-SHA256. Your receiver should verify. Secret rotation: regenerable from Adros Settings.
+- **Payload v1.1 schema:** stable, versioned. If I change it I'll bump to v1.2 and keep v1.1 live for a deprecation window.
+- **Idempotency:** Adros MCP has a 60s idempotency cache + 20/hr rate limit on `generate_creative` to stop retry storms. You shouldn't see duplicate image generations even if your client retries aggressively.
+- **AutoOptimize backend cleanup:** orphan experiments (client_id=NULL) are fixed. `_client_filter` now strictly scopes. `POST /optimization/cleanup` exists for bulk ops with `dry_run=true` default.
+
+---
+
+## 5. Things I will NOT do from the Adros side without your sign-off
+
+So we don't collide:
+1. Add `is_active` to `clients` table (need to know if Adros or OpenClaw owns truth)
+2. Add `/me/clients/active` endpoint (need to know if you want pull vs push)
+3. Emit per-overdue-experiment webhook (you may prefer Paperclip-side scheduling)
+4. Add heartbeat webhook (need your confirmation you want it)
+5. Add tenant_id to payload (need to know your multi-tenant plan)
+
+---
+
+## 6. Things I recommend you do on your side (mapped to your priority list)
+
+| Your priority item | Adros-aware addition |
+|---|---|
+| **P0 #1** Externalize client config | Include `adros_client_id` + `adros_user_token` per client/agent in the YAML |
+| **P0 #2** Unknown-client suppression | Use Adros `dedupe_key` as primary key; cross-check `client_id` against canonical config |
+| **P0 #3** Structured logging with trace_id | Propagate Adros `source_run_id` as your `trace_id` when an alert comes in — single ID across both systems |
+| **P0 #4** `assign_and_wake()` primitive | When the issue source is an Adros webhook, include `adros_issue_dedupe_key` in Paperclip issue metadata so the specialist can call back into Adros with context |
+| **P1 #6** Client resolver | Resolver should accept Adros `client_id` (UUID) as an input form, not just names/aliases |
+| **P1 #8** Normalize approval objects | Include `adros_source_run_id` + `adros_dedupe_key` in approval metadata for audit trail |
+
+---
+
+## 7. Quick reference — Adros endpoints you'll likely hit
+
+| Purpose | Method | Path |
+|---|---|---|
+| Configure webhook | PATCH | `/me/monitoring/webhook` |
+| Test webhook delivery | POST | `/me/monitoring/webhook/test` |
+| List clients | GET | `/me/clients` |
+| Campaign reporting | GET | `/me/campaigns?account_id=...&date_range=...` |
+| Optimization cleanup | POST | `/optimization/cleanup` (dry_run defaults true) |
+| MCP base | — | Streamable HTTP, auth via user_token |
+
+Base URL: `https://api.adros.ai`
+
+---
+
+## 8. Open questions for you to answer
+
+These are the five decisions I need back before I touch the Adros integration surface:
+
+1. **Source of truth for client list** — Adros or OpenClaw? (affects 3.1, 3.5)
+2. **Monitoring webhook tenancy** — single ops user or multi-tenant with routing ID? (affects 3.2)
+3. **Overdue experiment flow** — Adros pushes reminder webhook, or Paperclip owns scheduling? (affects 3.3, 3.4)
+4. **Dedupe window** — how long does OpenClaw treat an Adros `dedupe_key` as a duplicate? (affects 3.6)
+5. **Heartbeat webhook** — do you want Adros to send nightly "all clear" pings? (affects 3.7)
+
+Answer these and I can implement the Adros side in one pass instead of piecemeal.
+
+---
+
+## 9. One blunt observation
+
+Your priority list is solid and your architecture is clean. The biggest risk I see is **implicit contracts between Adros and Paperclip that neither side has documented**. This file is me writing down the ones I can see from my side. You probably have a similar list from your side. Let's reconcile them before either of us ships P0 #1, because config externalization is the moment those implicit contracts become explicit — and if we do it separately, they'll drift immediately.
+
+— Claude Code (Adros side)

@@ -1,0 +1,329 @@
+# Adros Contract Layer — Integration Spec for OpenClaw
+
+**Audience:** OpenClaw (Jarvis/Paperclip side)
+**Author:** Adros side (Claude Code)
+**Date:** 2026-04-08
+**Status:** Built, ready to deploy. Awaiting Sam's deploy approval.
+**Schema version:** v1
+
+> **Purpose:** Wire your Paperclip workers + Jarvis to call these endpoints so every specialist becomes deterministic. This is the C1 blocker from your `company-of-ai-architecture.md` doc, solved.
+
+---
+
+## What's been built (Adros side)
+
+### 1. New table column
+`clients.lifecycle_state` (varchar 30, default `new`) + `clients.lifecycle_updated_at` (timestamptz)
+
+Migration file: `api/db/migrations/021_client_lifecycle_state.sql`
+
+### 2. New service module
+`api/services/contract_service.py` — the spec library. Hard-coded playbooks for every (stage, task_type) combination, returning structured deliverable specs.
+
+### 3. New REST endpoints (all under `/api/v1`)
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/contract/spec?stage=...&task_type=...` | Get one deliverable spec |
+| GET | `/contract/specs?stage=...` | List specs (optionally by stage) |
+| POST | `/contract/writeback` | Push structured findings into memory |
+| GET | `/me/clients/{client_id}/state` | Get client lifecycle state |
+| PATCH | `/me/clients/{client_id}/state` | Set client lifecycle state |
+
+### 4. New MCP tools (4 total)
+| Tool | What it wraps |
+|---|---|
+| `get_deliverable_spec(stage, task_type)` | GET `/contract/spec` |
+| `list_deliverable_specs(stage)` | GET `/contract/specs` |
+| `contract_writeback(task_type, stage, findings, client_name, ...)` | POST `/contract/writeback` |
+| `get_client_state(client_name)` | GET `/me/clients/{id}/state` |
+| `set_client_state(client_name, lifecycle_state, reason)` | PATCH `/me/clients/{id}/state` |
+
+REST is for your Python workers (admin-worker, data-analyst-worker). MCP is for LLM agents (Jarvis, Hermes, Creative Director) calling Adros via natural language.
+
+---
+
+## Auth (same as existing Adros endpoints)
+
+**REST:** `Authorization: Bearer <mcp_token>` header. Same token you currently use for `/api/v1/me/memory/*`.
+**MCP:** `X-User-Token: <mcp_token>` header on the MCP connection (already configured in your existing setup).
+
+If you're already calling Adros memory routes, this works with zero auth changes.
+
+---
+
+## Lifecycle state machine
+
+```
+new → intake → research → creative → approved → live → optimizing
+                                                            ↓
+                                                        (steady state)
+                                                            ↓
+                                                        paused (optional pause)
+```
+
+States:
+- **new** — created, no work started
+- **intake** — gathering business context, personas, brand
+- **research** — keyword/market/competitor research
+- **creative** — generating ad creatives + copy
+- **approved** — Sam approved, ready to launch
+- **live** — campaigns running on Meta/Google
+- **optimizing** — in weekly optimization cycle (steady state)
+- **paused** — temporarily not being worked on
+
+**Existing clients are backfilled to `optimizing`** by the migration, since they're presumed live.
+
+---
+
+## Example flows
+
+### Flow 1: Jarvis routes a weekly review for ToonieTours
+
+```python
+# 1. Jarvis (Python or LLM) checks state
+GET /api/v1/me/clients/{toonietours-uuid}/state
+→ {"lifecycle_state": "optimizing", "suggested_next_state": "optimizing"}
+
+# 2. Jarvis fetches the deterministic spec
+GET /api/v1/contract/spec?stage=optimizing&task_type=weekly_review
+→ {
+    "stage": "optimizing",
+    "task_type": "weekly_review",
+    "produce": [
+      "weekly_metrics_xlsx",
+      "creative_refresh_recommendations",
+      "search_term_negatives",
+      "budget_reallocation_plan"
+    ],
+    "data_sources": [
+      "cometly_30d", "meta_insights_30d", "meta_insights_7d",
+      "google_insights_30d", "google_search_terms_14d"
+    ],
+    "adros_tools": [
+      "list_insights",
+      "google_campaign_performance_report",
+      "google_search_terms_report",
+      "match_strategy"
+    ],
+    "output_template": "meta_ads_audit",
+    "approval_required": true,
+    "notify_sam_threshold": "any creative_fatigue OR wasted_spend > $50 OR CPA > 1.5x target",
+    "format": "xlsx + chat summary + action log",
+    "recommended_specialist": "Hermes",
+    "next_stage": "optimizing",
+    "review_gates": [
+      "Hermes craft review",
+      "Jarvis client-context review",
+      "Sam approval"
+    ],
+    "schema_version": "v1"
+  }
+
+# 3. Jarvis creates Paperclip issue with the spec embedded
+#    (so the assigned specialist doesn't have to call Adros twice)
+POST {paperclip}/issues
+{
+  "title": "[ToonieTours] Weekly review — week of Apr 8",
+  "assignee": "Hermes",  # from spec.recommended_specialist
+  "metadata": {
+    "adros_spec": <full spec from step 2>,
+    "client_id": "toonietours-uuid",
+    "client_name": "ToonieTours"
+  }
+}
+
+# 4. Hermes wakes up, reads the spec from issue metadata, executes
+#    each adros_tool listed, produces the artifacts, then writes back
+
+POST /api/v1/contract/writeback
+{
+  "client_id": "toonietours-uuid",
+  "task_type": "weekly_review",
+  "stage": "optimizing",
+  "findings": {
+    "cpa_actual": 18.50,
+    "cpa_target": 25.00,
+    "winning_audience": "interest:hiking + age:25-44",
+    "fatigued_ads": ["ad_id_123", "ad_id_456"],
+    "wasted_spend_usd": 67,
+    "recommended_action": "scale winning audience, refresh fatigued creatives"
+  },
+  "artifact_path": "/tmp/toonietours-weekly-2026-04-08.xlsx",
+  "metrics_after": {"cpa": 18.50, "roas": 3.2, "spend_7d": 1200}
+}
+
+→ {
+    "success": true,
+    "weekly_log_id": "<uuid>",
+    "business_context_updated": true,
+    "artifact_storage": {
+      "convention": "gdrive_per_client_per_task",
+      "key": "<user_id>/toonietours-uuid/weekly_review/2026-04-08T03-00-00Z",
+      "path": "/tmp/toonietours-weekly-2026-04-08.xlsx",
+      "ready_for_admin_upload": true
+    },
+    "schema_version": "v1"
+  }
+
+# 5. Hermes hands off to admin-worker.py with that storage key.
+#    admin-worker uploads to GDrive at the convention path.
+#    Hermes posts the GDrive link as a Paperclip comment for review gate.
+
+# 6. After Sam approval (if required), no state change needed
+#    — optimizing is the steady state.
+```
+
+### Flow 2: Sam onboards new client Pranic Healing
+
+```python
+# 1. Jarvis creates client (existing API)
+# 2. Jarvis sets initial state
+PATCH /api/v1/me/clients/{pranic-uuid}/state
+{
+  "lifecycle_state": "intake",
+  "reason": "New client signed, starting onboarding"
+}
+
+# 3. Jarvis fetches intake spec
+GET /api/v1/contract/spec?stage=intake&task_type=gather_business_context
+→ {
+    "produce": ["business_context_record", "personas_seed"],
+    "adros_tools": ["get_intake_questions", "save_business_context", "save_persona"],
+    "approval_required": false,
+    "recommended_specialist": "Admin",
+    "next_stage": "research",
+    ...
+  }
+
+# 4. Admin agent runs intake conversation, saves context, calls writeback
+# 5. Jarvis advances state
+PATCH /api/v1/me/clients/{pranic-uuid}/state
+{"lifecycle_state": "research", "reason": "Intake complete"}
+
+# 6. Repeat for research → creative → approved → live → optimizing
+```
+
+---
+
+## Available specs (current as of v1)
+
+| Stage | Task type | Specialist | Approval? |
+|---|---|---|---|
+| `intake` | `gather_business_context` | Admin | No |
+| `intake` | `build_brand_profile` | Admin | No |
+| `research` | `keyword_research` | Data Analyst | No |
+| `research` | `market_research` | Data Analyst | **Yes** |
+| `creative` | `generate_creatives` | Creative Director | **Yes** |
+| `approved` | `launch_campaigns` | Hermes | No |
+| `live` | `first_week_check` | Data Analyst | No |
+| `optimizing` | `weekly_review` | Hermes | **Yes** |
+| `optimizing` | `creative_refresh` | Creative Director | **Yes** |
+| `optimizing` | `search_term_audit` | Hermes | **Yes** |
+| `optimizing` | `budget_reallocation` | Hermes | **Yes** |
+
+**For demo:** ToonieTours and Pranic Healing both go straight into `optimizing` (already backfilled by migration). The demo flow is `weekly_review` for ToonieTours + `creative_refresh` for Pranic.
+
+---
+
+## What you need to do (5-day sprint)
+
+### Day 1 — Wire the contract calls into your workers (1 day)
+- Add a tiny helper module `scripts/adros_contract.py` with 5 functions:
+  - `get_spec(stage, task_type) -> dict`
+  - `list_specs(stage=None) -> list[dict]`
+  - `writeback(client_id, task_type, stage, findings, **kwargs) -> dict`
+  - `get_client_state(client_id) -> dict`
+  - `set_client_state(client_id, state, reason="") -> dict`
+- Each function = one `httpx` call to Adros REST with Bearer auth
+- Reuse your existing `~/.openclaw/.env` for `ADROS_BASE_URL` and `ADROS_TOKEN`
+
+### Day 2 — Data Analyst Worker (your C2)
+- New worker `data-analyst-worker.py` (mirror of `admin-worker.py`)
+- Parses `data-task` blocks from Paperclip issue descriptions
+- For each task: calls `get_spec(stage, task_type)` first, then runs the listed `adros_tools` via Adros MCP, produces the listed `produce[]` artifacts
+- Calls `writeback()` with structured findings + artifact_path
+- Hands artifact to admin-worker via the `artifact_storage.key` returned
+
+### Day 3 — Jarvis intake template + state transitions
+- Wire Jarvis-orchestrator.py to call `set_client_state()` at every transition
+- Add an "intake mode" to Jarvis: when Sam says "onboard new client X", call `set_client_state(X, "intake")` and start the intake question flow
+- Use `list_specs(stage)` for "what should we do next" UX
+
+### Day 4 — Run the demo flows end-to-end
+- ToonieTours: `set_client_state(toonietours, "optimizing")` → trigger `weekly_review` → watch Data Analyst pull data, Hermes review, Sam approve, results write back
+- Pranic: same but `creative_refresh` task
+- Fix any bugs
+
+### Day 5 — Polish + screen-record for investor pitch
+- Clean Paperclip UI for the demo
+- Record the full flow: Sam asks Jarvis → Jarvis routes → Specialist executes → results in WhatsApp → Sam approves → ads update
+
+---
+
+## Behavior contract details
+
+### `writeback` storage convention
+The `artifact_storage.key` returned from writeback is meant as the canonical path for admin-worker GDrive upload:
+
+```
+gdrive://Adros/{user_id}/{client_id_or_solo}/{task_type}/{timestamp}/
+```
+
+Example: `gdrive://Adros/<sam-uuid>/<toonietours-uuid>/weekly_review/2026-04-08T03-00-00Z/`
+
+Inside that folder, admin-worker uploads the actual artifact file. This means every weekly cycle for ToonieTours has a stable, predictable GDrive folder path.
+
+### `findings` storage in business_context
+When you call `writeback`, the findings dict gets stored in `business_context.raw_research` under TWO keys:
+
+```python
+raw_research = {
+    "weekly_review_latest": <most recent findings>,
+    "weekly_review_history": [<last 20 findings, oldest to newest>],
+    # ... other task_types similarly
+}
+```
+
+This means specialists can call `get_business_context()` and immediately see "what did we find last cycle" without a separate query.
+
+### Schema versioning
+Every response includes `"schema_version": "v1"`. When we change the spec structure later, we'll bump to `v2` and your workers should refuse to process v2 specs until they're updated. **Pin your worker code to v1 for now** — easy migration later.
+
+### Error responses
+- **404** if no spec exists for a (stage, task_type) pair → don't retry, log it, escalate
+- **400** if invalid lifecycle_state → log it, escalate
+- **401** if auth fails → check token, escalate
+
+---
+
+## What I still need from you (Sam)
+
+1. **Deploy approval** — say "deploy" and I push to Railway. Once deployed:
+   - Apply migration 021 via Supabase SQL editor (manual, takes 30 seconds)
+   - Restart the Adros API (automatic on Railway)
+   - Test endpoints with your existing token
+2. **Confirm OpenClaw is starting Day 1 work** — once endpoints are live
+3. **Pick the demo client order** — ToonieTours first, then Pranic? Or parallel?
+
+---
+
+## One thing I'm watching
+
+The `client_id` lookup in MCP tools uses `MemoryService.resolve_client_id(user.id, client_name)` which expects the client to already exist. If Jarvis creates a brand-new client (Pranic) via the MCP, that resolver may need to be checked. **Mitigation:** for the demo, both clients (ToonieTours, Pranic) already exist in the Adros DB, so this isn't a blocker. Worth flagging for post-demo.
+
+---
+
+## Files changed (Adros side, for your awareness)
+
+```
+api/db/migrations/021_client_lifecycle_state.sql      ← new
+api/models/client.py                                  ← +2 fields
+api/services/contract_service.py                      ← new (300 lines)
+api/routes/contract.py                                ← new (280 lines)
+api/main.py                                           ← +2 lines (router wiring)
+api/mcp_server.py                                     ← +280 lines (4 new MCP tools)
+```
+
+All files compile clean. No changes to existing routes, services, or models beyond the additive `Client` field.
+
+— Claude Code (Adros side)

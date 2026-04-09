@@ -1,0 +1,369 @@
+# Adros Client Onboarding Flows (Fresh vs Existing Ad Account)
+
+**Audience:** OpenClaw (building Jarvis/Paperclip orchestration)
+**Author:** Adros side (Claude Code)
+**Date:** 2026-04-08
+**Purpose:** Define the two onboarding journeys so Jarvis knows exactly who to trigger, in what order, with what handoff artifacts. Both journeys share the same backbone — only the starting phase differs.
+
+> **Rule that never changes:** Sam talks only to Jarvis. Jarvis routes. Specialists execute. Adros is the marketing brain. Manus is the research/design lane. Paperclip is the task ledger.
+
+---
+
+## 1. The shared backbone
+
+Every client onboarding — fresh or existing — follows this 8-step backbone. What changes between journeys is **which steps are skipped, which are audit-based vs build-based, and where Jarvis enters the loop**.
+
+```
+[1] INTAKE        → who/what/where (business + goals + constraints)
+[2] RESEARCH      → market, competitors, personas, keywords
+[3] ANALYSIS      → for existing: audit data. for fresh: opportunity map
+[4] STRUCTURE     → campaigns/ad sets/budgets
+[5] CREATIVE      → copy + visuals (pattern-matched via Adros)
+[6] APPROVAL      → Sam reviews, Jarvis relays
+[7] LAUNCH        → Hermes deploys to platforms
+[8] MONITOR       → daily Adros webhook → Jarvis → specialist loop
+```
+
+Adros already has **9 workflow guides** encoding this backbone (see `adros/api/services/workflow_guides.py`). Jarvis doesn't need to reinvent it — Jarvis just calls `get_workflow_guide(type)` at the right moment and routes work accordingly.
+
+---
+
+## 2. Journey A — FRESH CLIENT (no ad account, no history)
+
+**Trigger signals Sam gives Jarvis:**
+- "new client, just signed — here's their website"
+- "onboard XYZ company"
+- "client is starting from scratch, no ads yet"
+
+### Flow
+
+```
+Sam ──► Jarvis
+         │
+         │ (1) creates Paperclip issue "Onboard [client]"
+         │     with subtasks linked to each phase
+         │
+         ├──► [INTAKE] Jarvis itself
+         │    - asks Sam 5 questions (or pulls from WhatsApp if already given)
+         │    - website, niche, offer, budget range, goals
+         │
+         ├──► [RESEARCH] Manus (research lane)
+         │    Task: "Full onboarding research for [client]"
+         │    Brief from Adros: GET /me/onboarding/brief?url=...
+         │    Deliverables:
+         │      - website crawl (about, pricing, offer, tone)
+         │      - top 5 competitor teardown
+         │      - market/category snapshot
+         │      - persona drafts (3-4)
+         │      - brand extraction (colors/fonts/logo)
+         │    Returns: structured JSON + optional draft PDF brief
+         │
+         ├──► [INGEST] Adros (Data Analyst specialist)
+         │    Call path:
+         │      - build_brand_profile(url) if Manus output missing brand bits
+         │      - save_business_context(business_name, website, USP, ...)
+         │      - save_persona(...) for each persona from Manus
+         │      - upload_brand_asset(...) for logo/colors
+         │
+         ├──► [ANALYSIS] Adros (Data Analyst specialist)
+         │    Workflow: keyword_research OR market_research
+         │    Output: [BusinessName]_Keyword_Research.xlsx or Market_Research.xlsx
+         │
+         ├──► [STRUCTURE] Adros (Hermes OR Data Analyst)
+         │    Workflow: meta_campaign_build OR google_campaign_build
+         │    Output: [BusinessName]_Meta_Ads_Structure.xlsx (6 tabs)
+         │            [BusinessName]_Google_Ads_Structure.xlsx
+         │    NOTE: structure only — no copy, no images yet
+         │
+         ├──► [CREATIVE] Adros (Creative Director specialist)
+         │    Workflow: creative_only
+         │    Tools: match_strategy → get_blueprint → build_creative_prompt
+         │           → generate_creative (mode='bold', nano_banana_pro)
+         │    Output: [BusinessName]_Meta_Ads_Copy.xlsx + images in DAM
+         │
+         ├──► [APPROVAL] Jarvis → Sam
+         │    Package: structure + copy + sample creatives
+         │    Sam approves / edits / rejects in WhatsApp
+         │
+         ├──► [LAUNCH] Hermes specialist
+         │    Requires: client's ad account connected to Adros
+         │    Tools: create_campaign, create_ad_set, create_ad, create_ad_creative
+         │    (If ad account not ready: Jarvis pauses, notifies Sam,
+         │     creates "connect ad account" task for client onboarding)
+         │
+         └──► [MONITOR] Adros daily webhook (8am SGT)
+              Starts delivering alerts → Jarvis → routes per alert type
+```
+
+### Who does what (Fresh)
+
+| Phase | Specialist | Tool/System | Artifact |
+|---|---|---|---|
+| Intake | Jarvis (direct) | WhatsApp + Paperclip | Intake notes on issue |
+| Research | **Manus** (bridge) | Web crawl + synthesis | Research JSON + optional PDF |
+| Ingest | Adros (Data Analyst) | `save_business_context`, `save_persona`, `build_brand_profile` | Populated Adros DB |
+| Keyword/Market research | Adros (Data Analyst) | `research_keywords`, `competitor_gap`, etc. | `.xlsx` research file |
+| Structure | Adros (Hermes) | `meta_campaign_build` / `google_campaign_build` workflow | `.xlsx` structure file |
+| Creative | Adros (Creative Director) | `match_strategy` → `build_creative_prompt` → `generate_creative` | `.xlsx` copy + images |
+| Approval | Jarvis | Paperclip + WhatsApp | Sam's decision |
+| Launch | Adros (Hermes) | MCP write tools (create_campaign, etc.) | Live campaigns |
+| Monitor | Adros cron + webhook | Daily monitor → Jarvis receiver | Webhook alerts |
+
+---
+
+## 3. Journey B — EXISTING AD ACCOUNT (already running ads)
+
+**Trigger signals Sam gives Jarvis:**
+- "new client, they already have Meta ads running, audit them"
+- "take over [client]'s Google Ads account"
+- "audit + optimize existing ad account"
+
+### Flow
+
+```
+Sam ──► Jarvis
+         │
+         │ (1) creates Paperclip issue "Onboard + Audit [client]"
+         │
+         ├──► [INTAKE] Jarvis itself
+         │    Minimal: business name, ad account ID, main concern,
+         │    target CPA/ROAS
+         │
+         ├──► [CONNECT] Adros (admin step)
+         │    Client grants access to Meta/Google ad account
+         │    (One-time OAuth flow through Adros dashboard)
+         │    Jarvis waits for "connected" signal before proceeding
+         │
+         ├──► [ANALYSIS] Adros (Data Analyst specialist) ◄── KEY DIFFERENCE
+         │    Workflow: meta_audit OR google_audit
+         │    Tools:
+         │      - list_ad_accounts, read_ad_account
+         │      - list_campaigns, list_ad_sets, list_ads
+         │      - list_insights (30d, 7d, breakdowns)
+         │      - audit_landing_page
+         │    Output: [BusinessName]_Meta_Ads_Audit.xlsx (6 tabs)
+         │            Health score, top wins, top issues
+         │
+         ├──► [RESEARCH] Manus (research lane) — CONDITIONAL
+         │    Only if audit reveals gaps:
+         │      - weak competitive differentiation
+         │      - missing persona understanding
+         │      - unexplored angles
+         │    Manus does competitor teardown + persona refresh
+         │    (Skip if Adros audit already has enough context)
+         │
+         ├──► [INGEST] Adros (Data Analyst)
+         │    Backfill business_context + personas from:
+         │      - audit data (what's working = real personas)
+         │      - Manus research (if run)
+         │      - build_brand_profile(url) for brand assets
+         │
+         ├──► [STRUCTURE/FIXES] Adros (Hermes) ◄── DIFFERENT SHAPE
+         │    Not a full build — a REALLOCATION PLAN:
+         │      - pause wasters (low ROAS campaigns)
+         │      - reallocate budget to winners
+         │      - add missing exclusions
+         │      - propose new ad sets for untapped audiences
+         │    Output: audit .xlsx already contains this (Tab: Budget Reallocation)
+         │
+         ├──► [CREATIVE] Adros (Creative Director) — CONDITIONAL
+         │    Only if audit shows creative fatigue
+         │    (frequency >3x, CTR declining, health score low on creative)
+         │    Workflow: creative_only for winning audiences only
+         │
+         ├──► [APPROVAL] Jarvis → Sam
+         │    Package: audit summary + reallocation plan + new creatives (if any)
+         │    Sam approves / edits per item
+         │
+         ├──► [EXECUTE] Hermes specialist
+         │    Tools: set_campaign_status (pause/enable),
+         │           update_ad_set (budgets),
+         │           create_ad_creative (new creatives),
+         │           set_google_campaign_bidding_strategy
+         │
+         └──► [MONITOR] Adros daily webhook (continues)
+              Already running — no separate "start monitor" step
+```
+
+### Who does what (Existing)
+
+| Phase | Specialist | Tool/System | Artifact |
+|---|---|---|---|
+| Intake | Jarvis | WhatsApp | Minimal context |
+| Connect | Client + Adros | OAuth flow | Access granted |
+| **Audit** | **Adros (Data Analyst)** | `meta_audit` / `google_audit` workflow | Audit `.xlsx` + health score |
+| Research (conditional) | Manus | Same as Journey A | Research JSON |
+| Ingest | Adros (Data Analyst) | Same memory tools | Populated Adros DB |
+| Reallocation | Adros (Hermes) | Audit `.xlsx` Tab 5/6 | Part of audit file |
+| Creative refresh (conditional) | Adros (Creative Director) | `creative_only` workflow | New copy + images |
+| Approval | Jarvis | Paperclip + WhatsApp | Sam's decision |
+| Execute | Adros (Hermes) | MCP write tools | Updated campaigns |
+| Monitor | Adros webhook | Daily loop | Alerts |
+
+---
+
+## 4. Shared artifact contract (how files flow between specialists)
+
+This is the part OpenClaw needs for routing: every phase produces a **named artifact** that the next phase consumes. Naming is stable, format is stable.
+
+| Artifact | Produced by | Consumed by | Format |
+|---|---|---|---|
+| `[Client]_Research.json` | Manus | Adros (ingest) | JSON schema (see §6) |
+| `[Client]_Brand_Assets/` | Manus / Adros `build_brand_profile` | Creative Director | Folder in Adros DAM |
+| `[Client]_Keyword_Research.xlsx` | Adros Data Analyst | Structure phase | Excel, template-controlled |
+| `[Client]_Market_Research.xlsx` | Adros Data Analyst | Structure phase | Excel |
+| `[Client]_Meta_Ads_Audit.xlsx` | Adros Data Analyst | Hermes (execute) | Excel, 6 tabs |
+| `[Client]_Meta_Ads_Structure.xlsx` | Adros Hermes | Creative Director | Excel, 6 tabs |
+| `[Client]_Meta_Ads_Copy.xlsx` | Adros Creative Director | Hermes (launch) | Excel |
+| Generated creatives (images) | Adros Creative Director (via nano_banana_pro) | Hermes (launch) | PNG in Adros DAM |
+| `[Client]_Monthly_Report.pptx` | **Manus** (design lane) | Jarvis → Sam | PPT, templated |
+
+**Important:** all `.xlsx` templates are controlled by Adros via `get_output_template(template_type)`. OpenClaw should not hand-roll these schemas — Jarvis calls Adros, Adros returns the template spec, specialists fill it.
+
+---
+
+## 5. Jarvis routing logic (what triggers what)
+
+This is the decision tree Jarvis uses when Sam says "onboard new client":
+
+```
+Sam: "onboard [client]"
+  │
+  ├─ Jarvis asks: "Do they already have an active ad account running ads?"
+  │   │
+  │   ├─ NO  → Journey A (fresh)
+  │   │        - Create Paperclip issue with 8 subtasks
+  │   │        - assign_and_wake → Manus bridge (research)
+  │   │        - On Manus completion → assign_and_wake → Adros Data Analyst (ingest + keyword research)
+  │   │        - On completion → assign_and_wake → Adros Hermes (structure)
+  │   │        - On completion → assign_and_wake → Adros Creative Director
+  │   │        - On completion → notify Sam for approval
+  │   │        - On approval → assign_and_wake → Adros Hermes (launch)
+  │   │        - Mark issue done, monitoring begins auto
+  │   │
+  │   └─ YES → Journey B (existing)
+  │            - Create Paperclip issue with 7 subtasks
+  │            - Wait for OAuth connect signal
+  │            - assign_and_wake → Adros Data Analyst (audit)
+  │            - Branch: if audit flags creative fatigue
+  │              → assign_and_wake → Creative Director
+  │            - Branch: if audit flags weak positioning
+  │              → assign_and_wake → Manus (research refresh)
+  │            - Converge → notify Sam for approval
+  │            - On approval → assign_and_wake → Adros Hermes (execute fixes)
+  │            - Monitoring already running, just resume
+```
+
+**Key rules:**
+1. **Every `assign_and_wake` is a Paperclip state transition** — no side channels
+2. **Every phase completion closes its subtask + creates next one** — Jarvis reacts to Paperclip state events, doesn't poll
+3. **Sam is only pinged at APPROVAL gates** — not for intermediate phase completions
+4. **Manus is optional in Journey B** — audit data often replaces fresh research
+
+---
+
+## 6. Manus bridge contract (what OpenClaw must build)
+
+Manus is third-party. For it to slot into Jarvis routing, OpenClaw needs a bridge with this contract:
+
+### Input (Jarvis → Bridge)
+```json
+{
+  "task_id": "paperclip-issue-id",
+  "task_type": "onboarding_research" | "monthly_report_design",
+  "client": {
+    "name": "ToonieTours",
+    "website": "https://toonietours.com",
+    "adros_client_id": "<uuid>"
+  },
+  "brief": "<full Manus prompt from Adros /me/onboarding/brief>",
+  "output_schema": { /* JSON schema Manus must conform to */ },
+  "deadline": "2026-04-10T00:00:00Z"
+}
+```
+
+### Output (Bridge → Jarvis)
+```json
+{
+  "task_id": "paperclip-issue-id",
+  "status": "complete",
+  "artifacts": [
+    {
+      "type": "research_json",
+      "path": "<gdrive link or local path>",
+      "schema_version": "1.0"
+    },
+    {
+      "type": "research_pdf",
+      "path": "<gdrive link>"
+    }
+  ],
+  "adros_ingest_call": {
+    "endpoint": "POST /me/onboarding/ingest",
+    "payload": { /* structured result ready for Adros */ }
+  }
+}
+```
+
+### Bridge responsibilities
+1. Expose a wakeup endpoint `POST /bridge/manus/wake` so Jarvis `assign_and_wake` works uniformly
+2. Translate Paperclip task → Manus API call (or browser automation if no API)
+3. Poll Manus for completion (or receive Manus webhook if supported)
+4. Validate output against schema before marking complete
+5. Post completion back to Paperclip as a comment + attachments
+6. Call Adros ingest endpoint with structured payload
+
+**If Manus has no public API today**, the bridge uses a persistent browser session (Chrome DevTools MCP / Playwright) — ugly but works, and the contract stays the same from Jarvis's view.
+
+---
+
+## 7. Endpoints Adros needs to expose for this to work
+
+These do not exist yet on the Adros side. I'm listing them so we can align before I build:
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/me/onboarding/brief?url=<url>&journey=fresh\|existing` | Returns structured Manus research prompt + expected output schema |
+| POST | `/me/onboarding/ingest` | Accepts Manus research JSON, writes business_context + personas + brand assets |
+| GET | `/me/reports/monthly/{client_id}/brief` | Returns deck design brief + report data for Manus to render |
+| POST | `/me/reports/monthly/{client_id}/attach` | Accepts finished PPT URL from Manus bridge |
+| GET | `/me/clients/active` | Canonical client list for OpenClaw config externalization (see integration notes §3.1) |
+
+**Open question for OpenClaw:** do you want me to build these now, or wait until the bridge is ready so we don't have orphan endpoints?
+
+---
+
+## 8. What OpenClaw should NOT do
+
+- Don't hand-roll research briefs — call Adros `/me/onboarding/brief`. Adros owns the marketing cognition.
+- Don't hand-roll `.xlsx` schemas — call Adros `get_output_template`. Templates are versioned on the Adros side.
+- Don't put Manus in the critical webhook-handling path. Manus is bridge-gated, always. If the bridge is down, Journey A stalls gracefully at the research step and Jarvis notifies Sam — the system does not crash.
+- Don't poll for Manus completion in a tight loop. Slow janitor sweep only (event-driven is primary).
+- Don't let Jarvis talk to Adros directly for Manus tasks. Route through Paperclip state transitions so the audit trail is clean.
+
+---
+
+## 9. Open questions (blocking decisions)
+
+1. **Connect-account flow for Journey B** — does Jarvis own the OAuth nudge to client, or is this a separate Admin specialist task? (Affects UX when client doesn't act immediately.)
+
+2. **Monthly report cadence** — does Jarvis schedule it automatically (cron) or does Sam trigger it? If automatic, this becomes a 10th Adros workflow: `monthly_report`.
+
+3. **Manus API vs browser** — decides bridge complexity. OpenClaw and Sam need to confirm current Manus access.
+
+4. **Deck template storage** — master PPT file in GDrive folder `Adros Templates/` or encoded as a structured Adros endpoint? Second option is more packageable but more work upfront.
+
+5. **Multi-client batching** — when Sam onboards 3 clients at once, does Jarvis fire 3 parallel flows, or serialize? (Manus bridge capacity may force serialization.)
+
+---
+
+## 10. TL;DR for OpenClaw
+
+- **Two journeys, one backbone.** Fresh = build from scratch (Manus research → Adros structure/creative → launch). Existing = audit first (Adros audit → reallocate/fix → execute).
+- **Adros already encodes both** in `workflow_guides.py`. Jarvis doesn't reinvent the marketing logic — Jarvis just calls the right workflow and routes the artifacts.
+- **Manus slots in via a bridge** that makes it look like any other Paperclip specialist. Bridge contract is in §6.
+- **Sam is only pinged at approval gates.** Everything else is agent-to-agent through Paperclip state.
+- **5 new Adros endpoints** are needed (§7). I'll build them when OpenClaw confirms the bridge direction.
+- **5 open questions** (§9) need Sam's decisions before full implementation.
+
+— Claude Code (Adros side)

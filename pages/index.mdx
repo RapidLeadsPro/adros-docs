@@ -1,0 +1,54 @@
+---
+title: Introduction
+description: Adros AI — the marketing brain for AI agents. 4,022 performance-tested ad patterns, 74 MCP tools, and an orchestration layer for autonomous ad management.
+---
+
+# Adros AI
+
+**The marketing brain for AI agents.**
+
+Adros is a pattern-driven creative intelligence platform that powers AI agents to build, launch, and optimize paid ad campaigns across Meta and Google — consistently, at enterprise quality, without human expertise.
+
+<br />
+
+## What Adros is
+
+- **4,022 performance-tested ad patterns** across 17 creative styles and 45 copy frameworks — the moat
+- **74 MCP tools** for pattern matching, creative generation, campaign building, memory, monitoring
+- **Daily autonomous monitor** — 6 health checks running at 8am SGT on every paying account
+- **Contract layer** — deterministic deliverable specs so specialists know exactly what to produce
+- **Creative pipeline** — Nano Banana Pro (Gemini 2.5) generation anchored to pattern blueprints
+- **Memory layer** — business context + personas + weekly action log, scoped per client
+
+## What Adros is NOT
+
+- Not an orchestrator — pair with Paperclip, Jarvis, or any MCP-compatible agent runtime
+- Not a task ledger — pair with Paperclip or your own issue tracker
+- Not a human chat interface — the dashboard is for inspection, the API is for agents
+
+## Who this documentation is for
+
+- **Agent builders** — integrating Adros MCP into Claude Desktop, Cursor, Paperclip, OpenClaw, or custom agents
+- **Engineers** — wiring Adros into existing orchestration stacks via REST or MCP
+- **Operators** — understanding the monitoring loop, webhook payloads, and contract layer
+
+## Read order
+
+1. **[Technical Overview](/integrations/overview)** — Adros stack, data model, 74 MCP tools, REST surface, monitor internals. Start here.
+2. **[Onboarding Flows](/integrations/onboarding-flows)** — Journey A (fresh client) vs Journey B (existing ad account). Backbone, routing, Manus bridge contract.
+3. **[Integration Notes](/integrations/integration-notes)** — 7 integration blind spots, Adros-aware additions to orchestration layer P0/P1 lists.
+4. **[Contract Layer](/integrations/contract-layer)** — Deterministic deliverable specs: `get_deliverable_spec`, `writeback`, `set_client_state`. The bridge between Adros and your orchestration.
+
+## Get started
+
+**Sign up:** [app.adros.ai](https://app.adros.ai) → connect Meta/Google ad accounts → copy your MCP token from Settings.
+
+**MCP endpoint:** `https://api.adros.ai/mcp` (Streamable HTTP, spec `2025-03-26`)
+
+**Auth:** `X-User-Token: <your-mcp-token>` header on MCP connection, or `Authorization: Bearer <your-mcp-token>` for REST.
+
+**REST base URL:** `https://api.adros.ai/api/v1`
+
+---
+
+*Adros is built by [Matrix AI Solution Pte Ltd](https://app.adros.ai) in Singapore. The dashboard lives at [app.adros.ai](https://app.adros.ai).*
