@@ -235,3 +235,113 @@ html.dark *:focus-visible {
   outline-offset: 2px;
   border-radius: 2px;
 }
+
+/* ============================================================ */
+/* LIGHT MODE                                                    */
+/* ============================================================ */
+/*
+ * The neon green #39ff14 is unreadable on white (1.8:1 contrast).
+ * For light mode we use a darker, saturated green that:
+ *   - reads cleanly on white (#00a838 = 4.6:1 contrast — AA compliant)
+ *   - hovers even darker for clarity (#008f2e)
+ *   - still feels brand-consistent with the Adros neon green identity
+ *
+ * All selectors scoped to html:not(.dark) so dark mode styles above win.
+ */
+
+/* ─── Content links ─── */
+html:not(.dark) main a:not(.nextra-sidebar-container a):not(.nextra-toc a) {
+  color: #00a838 !important;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(0, 168, 56, 0.25);
+  transition: color 0.15s ease, border-color 0.15s ease;
+  font-weight: 500;
+}
+
+html:not(.dark) main a:not(.nextra-sidebar-container a):not(.nextra-toc a):hover {
+  color: #008f2e !important;
+  border-bottom-color: #008f2e;
+}
+
+/* ─── Sidebar active item ─── */
+html:not(.dark) .nextra-sidebar-container a.active,
+html:not(.dark) .nextra-sidebar-container li.active > a,
+html:not(.dark) .nextra-sidebar-container .nx-text-primary-600 {
+  color: #00a838 !important;
+  background-color: rgba(0, 168, 56, 0.08) !important;
+}
+
+html:not(.dark) .nextra-sidebar-container a:hover {
+  color: #008f2e !important;
+}
+
+/* ─── TOC (right rail) ─── */
+html:not(.dark) .nextra-toc a:hover {
+  color: #00a838 !important;
+}
+
+html:not(.dark) .nextra-toc a.nx-text-primary-600,
+html:not(.dark) .nextra-toc .nx-text-primary-500 {
+  color: #00a838 !important;
+}
+
+/* ─── Heading anchor hover ─── */
+html:not(.dark) h2:hover a,
+html:not(.dark) h3:hover a,
+html:not(.dark) h4:hover a {
+  color: #00a838 !important;
+}
+
+/* ─── Inline code ─── */
+html:not(.dark) :not(pre) > code {
+  background-color: rgba(0, 168, 56, 0.08) !important;
+  color: #006d23 !important;
+  border: 1px solid rgba(0, 168, 56, 0.2);
+  border-radius: 4px;
+  padding: 0.15em 0.4em;
+  font-size: 0.875em;
+}
+
+/* ─── Blockquotes ─── */
+html:not(.dark) blockquote {
+  border-left-color: #00a838 !important;
+  background-color: rgba(0, 168, 56, 0.04) !important;
+  border-radius: 0 6px 6px 0;
+}
+
+/* ─── Table row hover ─── */
+html:not(.dark) tr:hover td {
+  background-color: rgba(0, 168, 56, 0.04) !important;
+}
+
+/* ─── Search input focus ─── */
+html:not(.dark) .nextra-search input:focus,
+html:not(.dark) input[type="search"]:focus {
+  border-color: rgba(0, 168, 56, 0.5) !important;
+  box-shadow: 0 0 0 3px rgba(0, 168, 56, 0.12);
+  outline: none;
+}
+
+/* ─── Text selection ─── */
+html:not(.dark) ::selection {
+  background-color: rgba(0, 168, 56, 0.25);
+  color: #000000;
+}
+
+/* ─── Focus ring ─── */
+html:not(.dark) *:focus-visible {
+  outline: 2px solid #00a838;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ─── Card hover on landing page ─── */
+html:not(.dark) .nextra-card:hover {
+  border-color: rgba(0, 168, 56, 0.4) !important;
+  box-shadow: 0 0 24px rgba(0, 168, 56, 0.08);
+}
+
+/* ─── Scrollbar hover ─── */
+html:not(.dark) ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 168, 56, 0.4);
+}
