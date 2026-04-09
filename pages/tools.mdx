@@ -220,7 +220,7 @@ The bridge between Adros and your orchestration stack. Deterministic deliverable
 
 | Tool | Purpose |
 |---|---|
-| `get_deliverable_spec` | Fetch the structured playbook for a `(stage, task_type)` pair — what to produce, what data to pull, when to escalate to Sam |
+| `get_deliverable_spec` | Fetch the structured playbook for a `(stage, task_type)` pair — what to produce, what data to pull, when to escalate to the human operator |
 | `list_deliverable_specs` | List all available specs, optionally filtered by stage |
 | `contract_writeback` | Push structured findings from a completed task back into `business_context.raw_research` + append to `weekly_logs` |
 | `get_client_state` | Get a client's current lifecycle state (`new → intake → research → creative → approved → live → optimizing → paused`) |

@@ -65,7 +65,7 @@ States:
 - **intake** — gathering business context, personas, brand
 - **research** — keyword/market/competitor research
 - **creative** — generating ad creatives + copy
-- **approved** — Sam approved, ready to launch
+- **approved** — approved by operator, ready to launch
 - **live** — campaigns running on Meta/Google
 - **optimizing** — in weekly optimization cycle (steady state)
 - **paused** — temporarily not being worked on
@@ -76,14 +76,18 @@ States:
 
 ## Example flows
 
-### Flow 1: Jarvis routes a weekly review for ToonieTours
+Two complete walkthroughs showing how an orchestration layer uses the Contract endpoints. Both use placeholder client names (`Acme Travel`, `Acme Wellness`) — substitute your own.
+
+### Flow 1 — Weekly review for an existing client
+
+Scenario: a travel client `Acme Travel` has been in `optimizing` state for months. The orchestration layer runs a weekly review every Monday.
 
 ```python
-# 1. Jarvis (Python or LLM) checks state
-GET /api/v1/me/clients/{toonietours-uuid}/state
+# 1. Orchestration layer checks the client's current state
+GET /api/v1/me/clients/<client-uuid>/state
 → {"lifecycle_state": "optimizing", "suggested_next_state": "optimizing"}
 
-# 2. Jarvis fetches the deterministic spec
+# 2. Fetch the deterministic spec for this task
 GET /api/v1/contract/spec?stage=optimizing&task_type=weekly_review
 → {
     "stage": "optimizing",
@@ -112,31 +116,31 @@ GET /api/v1/contract/spec?stage=optimizing&task_type=weekly_review
     "next_stage": "optimizing",
     "review_gates": [
       "Hermes craft review",
-      "Jarvis client-context review",
-      "Sam approval"
+      "Orchestration layer client-context review",
+      "Operator approval"
     ],
     "schema_version": "v1"
   }
 
-# 3. Jarvis creates Paperclip issue with the spec embedded
-#    (so the assigned specialist doesn't have to call Adros twice)
-POST {paperclip}/issues
+# 3. Orchestration layer creates a task with the spec embedded
+#    so the assigned specialist doesn't have to call Adros twice
+POST {task-ledger}/issues
 {
-  "title": "[ToonieTours] Weekly review — week of Apr 8",
+  "title": "[Acme Travel] Weekly review — week of Jan 13",
   "assignee": "Hermes",  # from spec.recommended_specialist
   "metadata": {
     "adros_spec": <full spec from step 2>,
-    "client_id": "toonietours-uuid",
-    "client_name": "ToonieTours"
+    "client_id": "<client-uuid>",
+    "client_name": "Acme Travel"
   }
 }
 
-# 4. Hermes wakes up, reads the spec from issue metadata, executes
-#    each adros_tool listed, produces the artifacts, then writes back
-
+# 4. The specialist wakes up, reads the spec from issue metadata,
+#    executes each adros_tool listed, produces the artifacts,
+#    then writes findings back to Adros
 POST /api/v1/contract/writeback
 {
-  "client_id": "toonietours-uuid",
+  "client_id": "<client-uuid>",
   "task_type": "weekly_review",
   "stage": "optimizing",
   "findings": {
@@ -147,7 +151,7 @@ POST /api/v1/contract/writeback
     "wasted_spend_usd": 67,
     "recommended_action": "scale winning audience, refresh fatigued creatives"
   },
-  "artifact_path": "/tmp/toonietours-weekly-2026-04-08.xlsx",
+  "artifact_path": "/tmp/acme-travel-weekly-2026-01-13.xlsx",
   "metrics_after": {"cpa": 18.50, "roas": 3.2, "spend_7d": 1200}
 }
 
@@ -157,33 +161,37 @@ POST /api/v1/contract/writeback
     "business_context_updated": true,
     "artifact_storage": {
       "convention": "gdrive_per_client_per_task",
-      "key": "<user_id>/toonietours-uuid/weekly_review/2026-04-08T03-00-00Z",
-      "path": "/tmp/toonietours-weekly-2026-04-08.xlsx",
+      "key": "<user_id>/<client-uuid>/weekly_review/2026-01-13T03-00-00Z",
+      "path": "/tmp/acme-travel-weekly-2026-01-13.xlsx",
       "ready_for_admin_upload": true
     },
     "schema_version": "v1"
   }
 
-# 5. Hermes hands off to admin-worker.py with that storage key.
-#    admin-worker uploads to GDrive at the convention path.
-#    Hermes posts the GDrive link as a Paperclip comment for review gate.
-
-# 6. After Sam approval (if required), no state change needed
-#    — optimizing is the steady state.
+# 5. The specialist hands off the artifact path to an upload worker,
+#    which stores the file at the storage key above and posts the
+#    final location back into the task for the review gate.
+#
+# 6. After operator approval (if required), no state change is needed —
+#    optimizing is the steady state and the cycle repeats next week.
 ```
 
-### Flow 2: Sam onboards new client Pranic Healing
+### Flow 2 — Onboarding a new client
+
+Scenario: the operator tells the orchestration layer to onboard a new wellness client `Acme Wellness`.
 
 ```python
-# 1. Jarvis creates client (existing API)
-# 2. Jarvis sets initial state
-PATCH /api/v1/me/clients/{pranic-uuid}/state
+# 1. Create the client record in Adros (via existing /me/clients API
+#    or the dashboard)
+
+# 2. Set the initial lifecycle state
+PATCH /api/v1/me/clients/<client-uuid>/state
 {
   "lifecycle_state": "intake",
   "reason": "New client signed, starting onboarding"
 }
 
-# 3. Jarvis fetches intake spec
+# 3. Fetch the intake spec
 GET /api/v1/contract/spec?stage=intake&task_type=gather_business_context
 → {
     "produce": ["business_context_record", "personas_seed"],
@@ -194,17 +202,21 @@ GET /api/v1/contract/spec?stage=intake&task_type=gather_business_context
     ...
   }
 
-# 4. Admin agent runs intake conversation, saves context, calls writeback
-# 5. Jarvis advances state
-PATCH /api/v1/me/clients/{pranic-uuid}/state
+# 4. The Admin specialist runs the intake conversation with the operator,
+#    saves business context + personas via the listed adros_tools, then
+#    writes findings back.
+
+# 5. Advance the client to the next lifecycle stage
+PATCH /api/v1/me/clients/<client-uuid>/state
 {"lifecycle_state": "research", "reason": "Intake complete"}
 
-# 6. Repeat for research → creative → approved → live → optimizing
+# 6. Repeat for research → creative → approved → live → optimizing.
+#    Each stage has its own spec and its own recommended specialist.
 ```
 
 ---
 
-## Available specs (current as of v1)
+## Available specs (v1)
 
 | Stage | Task type | Specialist | Approval? |
 |---|---|---|---|
@@ -220,57 +232,43 @@ PATCH /api/v1/me/clients/{pranic-uuid}/state
 | `optimizing` | `search_term_audit` | Hermes | **Yes** |
 | `optimizing` | `budget_reallocation` | Hermes | **Yes** |
 
-**For demo:** ToonieTours and Pranic Healing both go straight into `optimizing` (already backfilled by migration). The demo flow is `weekly_review` for ToonieTours + `creative_refresh` for Pranic.
+Call `GET /api/v1/contract/specs` with no filter to get the full list at runtime, or filter by `?stage=<state>` to get only the specs for one lifecycle stage.
 
 ---
 
-## What you need to do (5-day sprint)
+## Integrating the Contract layer — minimal checklist
 
-### Day 1 — Wire the contract calls into your workers (1 day)
-- Add a tiny helper module `scripts/adros_contract.py` with 5 functions:
-  - `get_spec(stage, task_type) -> dict`
-  - `list_specs(stage=None) -> list[dict]`
-  - `writeback(client_id, task_type, stage, findings, **kwargs) -> dict`
-  - `get_client_state(client_id) -> dict`
-  - `set_client_state(client_id, state, reason="") -> dict`
-- Each function = one `httpx` call to Adros REST with Bearer auth
-- Reuse your existing `~/.openclaw/.env` for `ADROS_BASE_URL` and `ADROS_TOKEN`
+To wire the Contract layer into an orchestration stack, an integrator typically needs:
 
-### Day 2 — Data Analyst Worker (your C2)
-- New worker `data-analyst-worker.py` (mirror of `admin-worker.py`)
-- Parses `data-task` blocks from Paperclip issue descriptions
-- For each task: calls `get_spec(stage, task_type)` first, then runs the listed `adros_tools` via Adros MCP, produces the listed `produce[]` artifacts
-- Calls `writeback()` with structured findings + artifact_path
-- Hands artifact to admin-worker via the `artifact_storage.key` returned
+1. **A thin REST client.** Five functions in any language that wrap the five endpoints:
+   - `get_spec(stage, task_type) -> dict`
+   - `list_specs(stage=None) -> list[dict]`
+   - `writeback(client_id, task_type, stage, findings, **kwargs) -> dict`
+   - `get_client_state(client_id) -> dict`
+   - `set_client_state(client_id, state, reason="") -> dict`
 
-### Day 3 — Jarvis intake template + state transitions
-- Wire Jarvis-orchestrator.py to call `set_client_state()` at every transition
-- Add an "intake mode" to Jarvis: when Sam says "onboard new client X", call `set_client_state(X, "intake")` and start the intake question flow
-- Use `list_specs(stage)` for "what should we do next" UX
+2. **Spec-driven task dispatch.** When the orchestration layer creates a new task, it should call `get_spec` first and embed the result in the task metadata. Specialists then read the spec from their task rather than re-fetching.
 
-### Day 4 — Run the demo flows end-to-end
-- ToonieTours: `set_client_state(toonietours, "optimizing")` → trigger `weekly_review` → watch Data Analyst pull data, Hermes review, Sam approve, results write back
-- Pranic: same but `creative_refresh` task
-- Fix any bugs
+3. **Structured writeback on completion.** When a specialist finishes, call `writeback` with the findings dict + artifact path. The response returns the canonical storage key that an upload worker should use.
 
-### Day 5 — Polish + screen-record for investor pitch
-- Clean Paperclip UI for the demo
-- Record the full flow: Sam asks Jarvis → Jarvis routes → Specialist executes → results in WhatsApp → Sam approves → ads update
+4. **State transitions at lifecycle boundaries.** Call `set_client_state` whenever the client advances a lifecycle stage. Call `get_client_state` whenever the orchestration layer needs to decide "what's next."
+
+5. **Schema version pinning.** All responses include `"schema_version": "v1"`. Workers should fail loud on version mismatch so you discover breaking changes early.
 
 ---
 
 ## Behavior contract details
 
 ### `writeback` storage convention
-The `artifact_storage.key` returned from writeback is meant as the canonical path for admin-worker GDrive upload:
+The `artifact_storage.key` returned from writeback is the canonical path for an upload worker to use:
 
 ```
 gdrive://Adros/{user_id}/{client_id_or_solo}/{task_type}/{timestamp}/
 ```
 
-Example: `gdrive://Adros/<sam-uuid>/<toonietours-uuid>/weekly_review/2026-04-08T03-00-00Z/`
+Example: `gdrive://Adros/<user-uuid>/<client-uuid>/weekly_review/2026-01-13T03-00-00Z/`
 
-Inside that folder, admin-worker uploads the actual artifact file. This means every weekly cycle for ToonieTours has a stable, predictable GDrive folder path.
+Inside that folder, the upload worker stores the actual artifact file. This means every weekly cycle for a given client has a stable, predictable folder path — easy to audit, easy to reference in future cycles.
 
 ### `findings` storage in business_context
 When you call `writeback`, the findings dict gets stored in `business_context.raw_research` under TWO keys:

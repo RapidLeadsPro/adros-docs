@@ -18,7 +18,7 @@ Every client onboarding — fresh or existing — follows this 8-step backbone. 
 [3] ANALYSIS      → for existing: audit data. for fresh: opportunity map
 [4] STRUCTURE     → campaigns/ad sets/budgets
 [5] CREATIVE      → copy + visuals (pattern-matched via Adros)
-[6] APPROVAL      → Sam reviews, Jarvis relays
+[6] APPROVAL      → Operator reviews, Jarvis relays
 [7] LAUNCH        → Hermes deploys to platforms
 [8] MONITOR       → daily Adros webhook → Jarvis → specialist loop
 ```
@@ -29,7 +29,7 @@ Adros already has **9 workflow guides** encoding this backbone (see `adros/api/s
 
 ## 2. Journey A — FRESH CLIENT (no ad account, no history)
 
-**Trigger signals Sam gives Jarvis:**
+**Trigger signals the operator gives Jarvis:**
 - "new client, just signed — here's their website"
 - "onboard XYZ company"
 - "client is starting from scratch, no ads yet"
@@ -37,13 +37,13 @@ Adros already has **9 workflow guides** encoding this backbone (see `adros/api/s
 ### Flow
 
 ```
-Sam ──► Jarvis
+Operator ──► Jarvis
          │
          │ (1) creates Paperclip issue "Onboard [client]"
          │     with subtasks linked to each phase
          │
          ├──► [INTAKE] Jarvis itself
-         │    - asks Sam 5 questions (or pulls from WhatsApp if already given)
+         │    - asks the operator 5 questions (or pulls from chat history if already given)
          │    - website, niche, offer, budget range, goals
          │
          ├──► [RESEARCH] Manus (research lane)
@@ -80,14 +80,14 @@ Sam ──► Jarvis
          │           → generate_creative (mode='bold', nano_banana_pro)
          │    Output: [BusinessName]_Meta_Ads_Copy.xlsx + images in DAM
          │
-         ├──► [APPROVAL] Jarvis → Sam
+         ├──► [APPROVAL] Jarvis → Operator
          │    Package: structure + copy + sample creatives
-         │    Sam approves / edits / rejects in WhatsApp
+         │    Operator approves / edits / rejects in WhatsApp
          │
          ├──► [LAUNCH] Hermes specialist
          │    Requires: client's ad account connected to Adros
          │    Tools: create_campaign, create_ad_set, create_ad, create_ad_creative
-         │    (If ad account not ready: Jarvis pauses, notifies Sam,
+         │    (If ad account not ready: Jarvis pauses, notifies operator,
          │     creates "connect ad account" task for client onboarding)
          │
          └──► [MONITOR] Adros daily webhook (8am SGT)
@@ -104,7 +104,7 @@ Sam ──► Jarvis
 | Keyword/Market research | Adros (Data Analyst) | `research_keywords`, `competitor_gap`, etc. | `.xlsx` research file |
 | Structure | Adros (Hermes) | `meta_campaign_build` / `google_campaign_build` workflow | `.xlsx` structure file |
 | Creative | Adros (Creative Director) | `match_strategy` → `build_creative_prompt` → `generate_creative` | `.xlsx` copy + images |
-| Approval | Jarvis | Paperclip + WhatsApp | Sam's decision |
+| Approval | Jarvis | Paperclip + WhatsApp | Operator's decision |
 | Launch | Adros (Hermes) | MCP write tools (create_campaign, etc.) | Live campaigns |
 | Monitor | Adros cron + webhook | Daily monitor → Jarvis receiver | Webhook alerts |
 
@@ -112,7 +112,7 @@ Sam ──► Jarvis
 
 ## 3. Journey B — EXISTING AD ACCOUNT (already running ads)
 
-**Trigger signals Sam gives Jarvis:**
+**Trigger signals the operator gives Jarvis:**
 - "new client, they already have Meta ads running, audit them"
 - "take over [client]'s Google Ads account"
 - "audit + optimize existing ad account"
@@ -120,7 +120,7 @@ Sam ──► Jarvis
 ### Flow
 
 ```
-Sam ──► Jarvis
+Operator ──► Jarvis
          │
          │ (1) creates Paperclip issue "Onboard + Audit [client]"
          │
@@ -170,9 +170,9 @@ Sam ──► Jarvis
          │    (frequency >3x, CTR declining, health score low on creative)
          │    Workflow: creative_only for winning audiences only
          │
-         ├──► [APPROVAL] Jarvis → Sam
+         ├──► [APPROVAL] Jarvis → Operator
          │    Package: audit summary + reallocation plan + new creatives (if any)
-         │    Sam approves / edits per item
+         │    Operator approves / edits per item
          │
          ├──► [EXECUTE] Hermes specialist
          │    Tools: set_campaign_status (pause/enable),
@@ -195,7 +195,7 @@ Sam ──► Jarvis
 | Ingest | Adros (Data Analyst) | Same memory tools | Populated Adros DB |
 | Reallocation | Adros (Hermes) | Audit `.xlsx` Tab 5/6 | Part of audit file |
 | Creative refresh (conditional) | Adros (Creative Director) | `creative_only` workflow | New copy + images |
-| Approval | Jarvis | Paperclip + WhatsApp | Sam's decision |
+| Approval | Jarvis | Paperclip + WhatsApp | Operator's decision |
 | Execute | Adros (Hermes) | MCP write tools | Updated campaigns |
 | Monitor | Adros webhook | Daily loop | Alerts |
 
@@ -215,7 +215,7 @@ This is the part OpenClaw needs for routing: every phase produces a **named arti
 | `[Client]_Meta_Ads_Structure.xlsx` | Adros Hermes | Creative Director | Excel, 6 tabs |
 | `[Client]_Meta_Ads_Copy.xlsx` | Adros Creative Director | Hermes (launch) | Excel |
 | Generated creatives (images) | Adros Creative Director (via nano_banana_pro) | Hermes (launch) | PNG in Adros DAM |
-| `[Client]_Monthly_Report.pptx` | **Manus** (design lane) | Jarvis → Sam | PPT, templated |
+| `[Client]_Monthly_Report.pptx` | **Manus** (design lane) | Jarvis → Operator | PPT, templated |
 
 **Important:** all `.xlsx` templates are controlled by Adros via `get_output_template(template_type)`. OpenClaw should not hand-roll these schemas — Jarvis calls Adros, Adros returns the template spec, specialists fill it.
 
@@ -223,10 +223,10 @@ This is the part OpenClaw needs for routing: every phase produces a **named arti
 
 ## 5. Jarvis routing logic (what triggers what)
 
-This is the decision tree Jarvis uses when Sam says "onboard new client":
+This is the decision tree Jarvis uses when the operator says "onboard new client":
 
 ```
-Sam: "onboard [client]"
+Operator: "onboard [client]"
   │
   ├─ Jarvis asks: "Do they already have an active ad account running ads?"
   │   │
@@ -236,7 +236,7 @@ Sam: "onboard [client]"
   │   │        - On Manus completion → assign_and_wake → Adros Data Analyst (ingest + keyword research)
   │   │        - On completion → assign_and_wake → Adros Hermes (structure)
   │   │        - On completion → assign_and_wake → Adros Creative Director
-  │   │        - On completion → notify Sam for approval
+  │   │        - On completion → notify operator for approval
   │   │        - On approval → assign_and_wake → Adros Hermes (launch)
   │   │        - Mark issue done, monitoring begins auto
   │   │
@@ -248,7 +248,7 @@ Sam: "onboard [client]"
   │              → assign_and_wake → Creative Director
   │            - Branch: if audit flags weak positioning
   │              → assign_and_wake → Manus (research refresh)
-  │            - Converge → notify Sam for approval
+  │            - Converge → notify operator for approval
   │            - On approval → assign_and_wake → Adros Hermes (execute fixes)
   │            - Monitoring already running, just resume
 ```
@@ -256,7 +256,7 @@ Sam: "onboard [client]"
 **Key rules:**
 1. **Every `assign_and_wake` is a Paperclip state transition** — no side channels
 2. **Every phase completion closes its subtask + creates next one** — Jarvis reacts to Paperclip state events, doesn't poll
-3. **Sam is only pinged at APPROVAL gates** — not for intermediate phase completions
+3. **The operator is only pinged at APPROVAL gates** — not for intermediate phase completions
 4. **Manus is optional in Journey B** — audit data often replaces fresh research
 
 ---
@@ -265,19 +265,19 @@ Sam: "onboard [client]"
 
 Manus is third-party. For it to slot into Jarvis routing, OpenClaw needs a bridge with this contract:
 
-### Input (Jarvis → Bridge)
+### Input (Orchestration → Research Bridge)
 ```json
 {
-  "task_id": "paperclip-issue-id",
+  "task_id": "<task-ledger-issue-id>",
   "task_type": "onboarding_research" | "monthly_report_design",
   "client": {
-    "name": "ToonieTours",
-    "website": "https://toonietours.com",
-    "adros_client_id": "<uuid>"
+    "name": "Acme Travel",
+    "website": "https://example.com",
+    "adros_client_id": "<client-uuid>"
   },
-  "brief": "<full Manus prompt from Adros /me/onboarding/brief>",
-  "output_schema": { /* JSON schema Manus must conform to */ },
-  "deadline": "2026-04-10T00:00:00Z"
+  "brief": "<full research prompt from Adros /me/onboarding/brief>",
+  "output_schema": { /* JSON schema the research lane must conform to */ },
+  "deadline": "2026-01-15T00:00:00Z"
 }
 ```
 
@@ -336,7 +336,7 @@ These do not exist yet on the Adros side. I'm listing them so we can align befor
 
 - Don't hand-roll research briefs — call Adros `/me/onboarding/brief`. Adros owns the marketing cognition.
 - Don't hand-roll `.xlsx` schemas — call Adros `get_output_template`. Templates are versioned on the Adros side.
-- Don't put Manus in the critical webhook-handling path. Manus is bridge-gated, always. If the bridge is down, Journey A stalls gracefully at the research step and Jarvis notifies Sam — the system does not crash.
+- Don't put Manus in the critical webhook-handling path. Manus is bridge-gated, always. If the bridge is down, Journey A stalls gracefully at the research step and Jarvis notifies operator — the system does not crash.
 - Don't poll for Manus completion in a tight loop. Slow janitor sweep only (event-driven is primary).
 - Don't let Jarvis talk to Adros directly for Manus tasks. Route through Paperclip state transitions so the audit trail is clean.
 
@@ -346,13 +346,13 @@ These do not exist yet on the Adros side. I'm listing them so we can align befor
 
 1. **Connect-account flow for Journey B** — does Jarvis own the OAuth nudge to client, or is this a separate Admin specialist task? (Affects UX when client doesn't act immediately.)
 
-2. **Monthly report cadence** — does Jarvis schedule it automatically (cron) or does Sam trigger it? If automatic, this becomes a 10th Adros workflow: `monthly_report`.
+2. **Monthly report cadence** — does the orchestration layer schedule it automatically (cron) or does the operator trigger it? If automatic, this becomes a 10th Adros workflow: `monthly_report`.
 
-3. **Manus API vs browser** — decides bridge complexity. OpenClaw and Sam need to confirm current Manus access.
+3. **Research lane API vs browser** — decides bridge complexity. Depends on which external research tool is being used (Perplexity, Manus, or custom) and whether it offers a programmatic API.
 
 4. **Deck template storage** — master PPT file in GDrive folder `Adros Templates/` or encoded as a structured Adros endpoint? Second option is more packageable but more work upfront.
 
-5. **Multi-client batching** — when Sam onboards 3 clients at once, does Jarvis fire 3 parallel flows, or serialize? (Manus bridge capacity may force serialization.)
+5. **Multi-client batching** — when the operator onboards 3 clients at once, does the orchestration layer fire 3 parallel flows, or serialize? (Research bridge capacity may force serialization.)
 
 ---
 

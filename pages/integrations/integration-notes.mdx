@@ -10,16 +10,16 @@
 
 ## 1. What Adros is (one paragraph)
 
-Adros AI is Sam's marketing automation backend (FastAPI on Railway, React frontend on Vercel, Supabase Postgres). It holds 4,022 enriched ad patterns, runs daily autonomous monitoring (6 checks at 8am SGT), and exposes an MCP server that specialists (Creative Director, Data Analyst, Hermes) use as their **strategy brain, memory, and optimization engine**. Adros is where the intelligence lives. Jarvis/Paperclip is where the *coordination* lives. Your job is orchestration; Adros' job is marketing cognition.
+Adros AI is a marketing automation backend (FastAPI on Railway, React frontend on Vercel, Supabase Postgres). It holds 4,022 enriched ad patterns, runs daily autonomous monitoring (6 checks at 8am SGT), and exposes an MCP server that specialists (Creative Director, Data Analyst, Hermes) use as their **strategy brain, memory, and optimization engine**. Adros is where the intelligence lives. The orchestration layer (Paperclip, OpenClaw, or custom) is where the *coordination* lives. The orchestration layer owns routing; Adros owns marketing cognition.
 
 ---
 
 ## 2. How Adros talks to your system today
 
-### 2.1 Outbound: Daily Monitoring Webhook (Adros → OpenClaw)
+### 2.1 Outbound: Daily Monitoring Webhook (Adros → receiver)
 
 **Trigger:** Daily cron at 8am SGT inside Adros backend
-**Endpoint:** Configured per-user in Adros Settings (points at your webhook receiver)
+**Endpoint:** Configured per-user in Adros Settings (points at the orchestration layer's webhook receiver)
 **Auth:** HMAC-SHA256 signature in `X-Adros-Signature` header, secret stored in Adros `users.monitoring_webhook_secret`
 **Payload version:** v1.1
 
@@ -27,12 +27,12 @@ Adros AI is Sam's marketing automation backend (FastAPI on Railway, React fronte
 ```json
 {
   "version": "1.1",
-  "source_run_id": "monitor_2026-04-08T00:00:00Z",
-  "generated_at": "2026-04-08T00:00:00Z",
+  "source_run_id": "monitor_2026-01-15T00:00:00Z",
+  "generated_at": "2026-01-15T00:00:00Z",
   "summary": {
     "total_issues": 12,
     "notify_sam_count": 3,
-    "affected_clients": ["ToonieTours", "Pranic Healing"],
+    "affected_clients": ["Acme Travel", "Acme Wellness"],
     "alert_types": {"creative_fatigue": 4, "search_term_waste": 6, "rsa_health": 2}
   },
   "issues": [
@@ -42,12 +42,12 @@ Adros AI is Sam's marketing automation backend (FastAPI on Railway, React fronte
       "severity": "high",
       "headline": "...",
       "summary": "...",
-      "client_name": "ToonieTours",
-      "client_id": "<adros-uuid>",
+      "client_name": "Acme Travel",
+      "client_id": "<client-uuid>",
       "recommended_specialist": "creative_director",
       "notify_sam": true,
       "metrics": {...},
-      "timestamp": "2026-04-08T00:00:00Z"
+      "timestamp": "2026-01-15T00:00:00Z"
     }
   ]
 }
@@ -72,9 +72,9 @@ These map onto `docs/implementation-priority-list.md` items.
 **Your P0 #1 (Externalize client config) and P0 #2 (Unknown-client suppression) are correct — but they currently only defend *downstream*. Adros is upstream and has no idea which clients are live in your system.**
 
 Concrete consequence:
-- Adros runs daily monitoring across **every client in its DB**, including dropped ones (APOL/`act_368004676` being the canonical example).
+- Adros runs daily monitoring across **every client in its DB**, including dropped ones — any ad account whose token is still valid will produce alerts, even if the orchestration layer no longer considers that client active.
 - Adros sends webhook alerts for those clients.
-- Your webhook receiver then has to suppress them (which you're doing), but Adros has already burned Haiku tokens generating the alert text.
+- The receiver then has to suppress them downstream, but Adros has already burned LLM tokens generating the alert text.
 
 **What I need from you:**
 - Decide whether Adros should **pull** your canonical client list (e.g., `GET /openclaw/active-clients` on your side) on each monitor run, OR

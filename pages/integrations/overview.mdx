@@ -19,7 +19,7 @@
 **Adros is NOT:**
 - An orchestrator (that's Jarvis)
 - A task ledger (that's Paperclip)
-- A human chat interface (Sam talks to Jarvis, not Adros — dashboard `app.adros.ai` is for inspection)
+- A human chat interface (operators talk to an orchestration layer, not directly to Adros — `app.adros.ai` dashboard is for inspection only)
 - A generic API proxy (Meta/Google are wrapped inside Adros as *marketing tools*, not thin shims)
 
 **Mental model in one sentence:** *Adros = library of marketing intelligence + execution hands on Meta/Google. Paperclip = work queue. Jarvis = conductor. Manus = research/design lane.*
@@ -221,7 +221,7 @@ set_google_campaign_bidding_strategy
 ### Idempotency + rate limiting (on MCP)
 - `generate_creative` has a **60-second idempotency cache** (hash of `prompt[:200] + user_id + aspect_ratio`) — prevents retry-storm duplicates
 - `generate_creative` is **rate-limited at 20/hour/user**
-- Specialists hitting this limit get a clear error — OpenClaw should surface to Sam, not retry
+- Specialists hitting this limit get a clear error — the orchestration layer should surface to the operator, not retry
 
 ---
 
@@ -366,9 +366,9 @@ Each check produces 0+ issues. All wrapped in try/except — one check failing d
 1. **`session_check.session_start_check`** → overdue experiments + ecosystem alerts + compliance blocking
 2. **`creative_fatigue_detector.detect_creative_fatigue`** → per Meta account (first 3) → `fatigued_ads` + `early_warning_ads`. Critical if frequency > 5.0
 3. **`advantage_plus_detector.get_advantage_plus_campaigns`** → Meta Advantage+ campaigns flagged for manual review
-4. **`search_term_analyzer.analyze_search_terms`** → Google, per customer (first 3). Issue if wasted_spend > $20. Critical if > $100. Notify Sam if > $100. Also flags low quality-score keywords (>= 3 issues)
+4. **`search_term_analyzer.analyze_search_terms`** → Google, per customer (first 3). Issue if wasted_spend > $20. Critical if > $100. Notify operator if > $100. Also flags low quality-score keywords (>= 3 issues)
 5. **`rsa_asset_monitor.analyze_rsa_assets`** → Google RSAs below "Good" ad strength
-6. **`google_conversion_health.check_google_conversion_health`** → health_score 0-100, status `excellent|good|fair|poor`. Notify Sam if status="poor"
+6. **`google_conversion_health.check_google_conversion_health`** → health_score 0-100, status `excellent|good|fair|poor`. Notify operator if status="poor"
 
 ### Per-issue structure (`_add_issue` in `autonomous_monitor.py` line 104)
 ```python
@@ -381,7 +381,7 @@ Each check produces 0+ issues. All wrapped in try/except — one check failing d
     "link": str,                  # direct URL to fix
     "client_name": str,           # 'default' for solo, account_id for agency
     "recommended_specialist": str,  # "Hermes" | "Creative Director" | "Data Analyst" | "Admin"
-    "notify_sam": bool,           # True if Sam should be pinged immediately
+    "notify_sam": bool,           # legacy field name — "True if the human operator should be pinged immediately"
     "metrics": dict,              # structured metrics for routing logic
     "dedupe_key": str,            # 16-char sha256 hash (see below)
     "source_run_id": str,         # UUID correlating all issues from this run
@@ -405,23 +405,25 @@ Same alert type + same client + same headline = same dedupe_key. OpenClaw should
   "version": "1.1",
   "source_run_id": "<uuid>",
   "user_id": "<uuid>",
-  "user_email": "sam@...",
-  "checked_at": "2026-04-08T00:00:00+00:00",
+  "user_email": "operator@example.com",
+  "checked_at": "2026-01-15T00:00:00+00:00",
   "severity": "critical|warning|info",
   "issue_count": 12,
   "notify_sam_count": 3,
-  "affected_clients": ["ToonieTours", "Pranic Healing"],
+  "affected_clients": ["Acme Travel", "Acme Wellness"],
   "alert_types": ["creative_fatigue", "search_term_waste", "rsa_health"],
   "issues": [ ... array of issue objects ... ]
 }
 ```
 
-### Webhook delivery details (things that are different from what OpenClaw might assume)
+> **Legacy field naming:** `notify_sam_count` is the production field name and maps to the per-issue `notify_sam` flag. This is legacy naming from Adros' early development — it means "should the human operator be pinged immediately." A future schema version will rename it to `notify_operator_count`. For now, document/parse it under its current name.
+
+### Webhook delivery details
 - **POST** with `Content-Type: application/json`, `User-Agent: Adros-Monitor/1.0`
 - **Signature header:** `X-Adros-Signature: sha256=<hex>`
-- **Signature input:** `json.dumps(payload, sort_keys=True).encode("utf-8")` — YOU MUST sort keys when verifying
+- **Signature input:** `json.dumps(payload, sort_keys=True).encode("utf-8")` — receivers MUST sort keys when verifying
 - **Timeout:** 15 seconds (`httpx.AsyncClient(timeout=15.0)`)
-- **NO automatic retries** in the current code. 5xx / timeout / network error = logged and dropped. If OpenClaw's receiver is down, that day's alerts are lost unless Adros is the one implementing retries. ← **Gap worth fixing on the Adros side.**
+- **NO automatic retries** in the current code. 5xx / timeout / network error = logged and dropped. If the receiver is down, that day's alerts are lost unless Adros-side retries are implemented. ← **Known gap, documented for awareness.**
 - Success = HTTP 2xx only. Any non-2xx is logged as a warning but no retry fires.
 
 ### Email fallback
@@ -434,7 +436,7 @@ Same run also sends an email via Resend if `monitoring_emails_enabled=true`. Ema
 Hard rules baked into the MCP server instructions:
 1. **ALWAYS `mode='bold'`** — produces editorial / cinematic output (as opposed to `autonomous` which is more literal)
 2. **ALWAYS `generator='nano_banana_pro'`** — Gemini 2.5 Pro image model, better than nano_banana_2 for ads
-3. **ALWAYS `auto_select=True`** on `build_creative_prompt` unless Sam explicitly picks a pattern
+3. **ALWAYS `auto_select=True`** on `build_creative_prompt` unless the operator explicitly picks a pattern
 
 ### The canonical sequence
 ```python
@@ -448,7 +450,7 @@ patterns = match_strategy(
 # 2. Compose the prompt (auto-selects best pattern, loads brand + business + persona)
 prompt = build_creative_prompt(
     auto_select=True,
-    client_name="ToonieTours",
+    client_name="Acme Travel",  # your client name
     mode="bold"
 )
 # Internally: loads pattern.blueprint_json + enrichment_metadata
