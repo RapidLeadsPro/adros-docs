@@ -104,7 +104,7 @@ const config: DocsThemeConfig = {
   },
   darkMode: true,
   nextThemes: {
-    defaultTheme: 'light',
+    defaultTheme: 'dark',
   },
   footer: {
     text: (
