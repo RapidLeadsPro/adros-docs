@@ -1,0 +1,92 @@
+---
+title: UI Handoff (2026-04-10)
+description: Frontend handoff for Adros Command Center overhaul. Live backend endpoints, pending file APIs, build order, and implementation notes.
+---
+
+# UI Handoff (2026-04-10)
+
+Audience: UI/UX engineers and frontend contributors continuing the Adros dashboard overhaul.
+
+## Backend Endpoints Ready Now
+
+All endpoints below are live on `https://api.adros.ai/api/v1`.
+
+### Chat Agent
+
+- `POST /chat` — send a message and get full response
+- `WS /ws/chat` — streaming chat response
+- `GET /chat/memories` — memory debug endpoint
+- Auth: `Authorization: Bearer <user_mcp_token>`
+
+### Command Center / Dashboard
+
+- `GET /projects` — list projects
+- `GET /projects/{id}/tasks` — list tasks with subtasks
+- `GET /tasks/{id}/events` — task activity feed
+- `POST /audits/trigger` — trigger audit
+- `POST /tasks/{id}/approve` — approve task
+- `POST /tasks/{id}/reject` — reject task with feedback
+- `GET /approvals/pending` — pending approvals queue
+- `WS /ws/events/{task_id}?token=<mcp_token>` — real-time event stream
+
+## File Storage Status
+
+R2 bucket is provisioned, but file APIs are not implemented yet.
+
+Planned backend endpoints:
+
+- `POST /files/upload` — upload to R2
+- `GET /files/{path}` — signed download URL
+- `GET /files/browse?client_id=X` — list files for UI browser
+
+Until these are live, file browser UI should be treated as scaffold/placeholder.
+
+## Canonical UI Spec
+
+Use:
+
+- `C:/Users/music/My Drive/RapidLeads/System Docs/UI-OVERHAUL-SPEC.md`
+
+Primary build order:
+
+1. Command Center
+2. Chat Panel
+3. Campaign Metrics
+4. Approvals
+5. File Browser
+
+## Frontend Implementation Snapshot (adros-app)
+
+Implemented in `c:\Cursor Projects\Adros\adros-app`:
+
+- Command Center: `client/src/pages/Dashboard.tsx`
+- Chat panel: `client/src/components/command-center/ChatPanel.tsx`
+- Campaign metrics redesign: `client/src/pages/Campaigns.tsx`
+- Approvals page: `client/src/pages/Approvals.tsx`
+- Files page (placeholder): `client/src/pages/Files.tsx`
+- API helper expansion: `client/src/lib/api.ts`
+- Route wiring: `client/src/App.tsx`
+- Sidebar nav updates: `client/src/components/DashboardLayout.tsx`
+
+## Rollback Safety
+
+Backup snapshots are in:
+
+- `c:\Cursor Projects\Adros\adros-app\backups\ui-overhaul-2026-04-10\`
+
+Includes pre-overhaul copies of:
+
+- `Dashboard.tsx`
+- `Campaigns.tsx`
+- `DashboardLayout.tsx`
+- `App.tsx`
+- `api.ts`
+
+## Immediate Next Step
+
+Pure frontend completion + deployment validation:
+
+- run full local check/build where toolchain is complete
+- verify `/dashboard`, `/campaigns`, `/approvals`, `/files`
+- deploy frontend once smoke test passes
+
