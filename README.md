@@ -2,7 +2,7 @@
 
 Developer and integration documentation for **Adros AI** — the marketing brain for AI agents.
 
-- Live site: [docs.adros.ai](https://docs.adros.ai) _(pending DNS)_
+- Live site: [docs.adros.ai](https://docs.adros.ai)
 - Dashboard: [app.adros.ai](https://app.adros.ai)
 - API: [api.adros.ai](https://api.adros.ai)
 

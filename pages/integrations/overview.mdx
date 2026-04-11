@@ -15,15 +15,13 @@
 
 ## 1. What Adros is
 
-**Adros is the marketing brain.** FastAPI backend + Postgres + MCP server + React dashboard. It holds the 4,022-pattern database, the memory layer, the creative pipeline, and the daily autonomous monitor. Specialists (Creative Director, Hermes, Data Analyst) call Adros to "think like marketers."
+**Adros is a hybrid marketing OS:** the same FastAPI + Postgres + MCP stack powers **operator-grade dashboard workflows** and **external AI agents**.
 
-**Adros is NOT:**
-- An orchestrator (that's Jarvis)
-- A task ledger (that's Paperclip)
-- A human chat interface (operators talk to an orchestration layer, not directly to Adros — `app.adros.ai` dashboard is for inspection only)
-- A generic API proxy (Meta/Google are wrapped inside Adros as *marketing tools*, not thin shims)
+- **Marketing brain:** 4,022-pattern database, memory layer, creative pipeline, daily autonomous monitor. Specialists and MCP clients call Adros to "think like marketers" and act on Meta/Google through wrapped tools (not thin generic proxies).
+- **Orchestration surfaces:** `app.adros.ai` includes **Command Center** (client-scoped task inbox, live event timeline, approvals), **Strategy Workspace** (staged strategy/creative artifacts and masters), **Files** (R2-backed, scoped storage), **Campaigns** (live metrics when accounts are connected), **Adros CEO** (coordination/routing), plus chat where wired. Tasks and events are the **system of record** for automation runs — whether the trigger came from the UI or MCP.
+- **External orchestration:** Many customers still pair Adros with Jarvis, Paperclip, OpenClaw, or custom conductors. That is fine: Adros remains the **marketing capability + data plane**; the conductor owns cross-tool sequencing if you want it outside Adros.
 
-**Mental model in one sentence:** *Adros = library of marketing intelligence + execution hands on Meta/Google. Paperclip = work queue. Jarvis = conductor. Manus = research/design lane.*
+**Mental model in one sentence:** *Adros = marketing intelligence + execution hands + **traceable tasks/events/files** on one backend. External orchestrators = optional conductors around that plane.*
 
 ---
 
@@ -41,7 +39,7 @@
 | Image gen | Google Gemini Nano Banana Pro (default) / Nano Banana 2 |
 | Email | Resend |
 | Auth | Supabase Auth JWT + per-feature `user_token`/`mcp_token` |
-| File storage | Supabase Storage buckets |
+| File storage | **Cloudflare R2** (S3-compatible; client-scoped keys) — primary object store for dashboard Files + audit artifacts; Postgres remains on Supabase |
 
 ### Background loops started in `main.py` lifespan
 1. `token_refresh_loop` — refreshes expiring Meta tokens daily
@@ -607,7 +605,7 @@ But the point of THIS doc is that you shouldn't have to.
 - **Adros version at time of writing:** 0.3.0 (from `main.py` FastAPI constructor)
 - **MCP SDK:** `mcp==1.26.0` (Streamable HTTP, spec `2025-03-26`)
 - **Tool count:** 74 (declared in `main.py` root endpoint, line 152)
-- **Last repo verification:** 2026-04-08, reading from `c:\Cursor Projects\Adros\adros`
+- **Last repo verification:** 2026-04-11, reading from `c:\Cursor Projects\Adros\adros` + `adros-app` (dashboard routes and R2 file service)
 - **Pattern DB count:** 4,022 rows (from prior Session 72 work)
 
 If any of these drift, re-verify against the live repo. I'll update this doc when Adros hits a material breaking change.
@@ -616,8 +614,8 @@ If any of these drift, re-verify against the live repo. I'll update this doc whe
 
 ## 15. TL;DR (if you read nothing else)
 
-- **Adros = marketing brain.** Jarvis = conductor. Paperclip = task ledger. Manus = research/design lane.
-- **Backend:** FastAPI 0.3.0 on Railway at `api.adros.ai`. Postgres via Supabase.
+- **Adros = hybrid marketing OS:** marketing brain (patterns, memory, creative, monitor) **plus** dashboard orchestration (tasks, timeline, approvals, workspace, files, campaigns). External stacks (Jarvis, Paperclip, etc.) remain optional conductors.
+- **Backend:** FastAPI 0.3.0 on Railway at `api.adros.ai`. Postgres via Supabase. **Files / audit blobs:** R2.
 - **MCP:** 74 tools at `/mcp`, Streamable HTTP, auth via `X-User-Token`.
 - **REST:** all under `/api/v1/*`, JWT auth, `/me/monitoring/webhook` for config.
 - **9 workflow playbooks** in `api/services/workflow_guides.py` — the authoritative marketing SOPs.
@@ -625,6 +623,7 @@ If any of these drift, re-verify against the live repo. I'll update this doc whe
 - **Creative pipeline:** always `mode='bold'` + `nano_banana_pro`, 60s idempotency + 20/hr rate limit.
 - **Memory layer:** business_context + personas + weekly_logs, scoped by (user_id, client_id) where `client_id=NULL` is solo.
 - **Pattern moat:** 4,022 patterns with enrichment_metadata + image_generation_prompt hidden from public schemas.
+- **Quality track:** audit scorecards / guardrails / artifact persistence — confirm `AUDIT_QUALITY_TRACK_ENABLED` and deploy on your environment.
 - **Five new endpoints** still need to be built for onboarding + monthly reports (see [Onboarding Flows §7](/integrations/onboarding-flows)).
 
 — Adros team

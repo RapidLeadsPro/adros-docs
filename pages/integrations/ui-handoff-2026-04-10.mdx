@@ -1,92 +1,76 @@
 ---
 title: UI Handoff (2026-04-10)
-description: Frontend handoff for Adros Command Center overhaul. Live backend endpoints, pending file APIs, build order, and implementation notes.
+description: Frontend ↔ backend alignment for Adros dashboard. Command Center, Strategy Workspace, Files on R2, Campaigns, CEO — live routes and API expectations (verify on your deploy).
 ---
 
 # UI Handoff (2026-04-10)
 
-Audience: UI/UX engineers and frontend contributors continuing the Adros dashboard overhaul.
+Audience: UI/UX engineers and frontend contributors; also useful for anyone documenting **what ships in `adros-app`** vs what is live on `app.adros.ai` after deploy.
 
-## Backend Endpoints Ready Now
+## Backend endpoints (verify on `https://api.adros.ai/api/v1`)
 
-All endpoints below are live on `https://api.adros.ai/api/v1`.
-
-### Chat Agent
+### Chat agent
 
 - `POST /chat` — send a message and get full response
 - `WS /ws/chat` — streaming chat response
 - `GET /chat/memories` — memory debug endpoint
-- Auth: `Authorization: Bearer <user_mcp_token>`
+- Auth: `Authorization: Bearer <user_mcp_token>` (and routing variants as documented in OpenAPI)
 
-### Command Center / Dashboard
+### Command Center / orchestration
 
 - `GET /projects` — list projects
 - `GET /projects/{id}/tasks` — list tasks with subtasks
-- `GET /tasks/{id}/events` — task activity feed
+- `GET /tasks/{id}/events` — task activity feed (confirm ordering/limit behavior against OpenAPI and production)
 - `POST /audits/trigger` — trigger audit
 - `POST /tasks/{id}/approve` — approve task
 - `POST /tasks/{id}/reject` — reject task with feedback
 - `GET /approvals/pending` — pending approvals queue
-- `WS /ws/events/{task_id}?token=<mcp_token>` — real-time event stream
+- `WS /ws/events/{task_id}?token=<mcp_token>` — real-time event stream (when enabled)
 
-## File Storage Status
+### Files (R2)
 
-R2 bucket is provisioned, but file APIs are not implemented yet.
+File APIs are **implemented** in backend (`api/services/file_storage.py` and routes under `/api/v1/files` — see live OpenAPI). The dashboard **Files** page targets these endpoints for upload and browse.
 
-Planned backend endpoints:
+Until your environment has R2 env vars configured (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, bucket), uploads will fail with a clear configuration error — not a missing-route404.
 
-- `POST /files/upload` — upload to R2
-- `GET /files/{path}` — signed download URL
-- `GET /files/browse?client_id=X` — list files for UI browser
+### Audit quality track
 
-Until these are live, file browser UI should be treated as scaffold/placeholder.
+Scorecards, guardrails, and artifact persistence depend on migration + `AUDIT_QUALITY_TRACK_ENABLED`. Treat as **deploy-dependent**; verify on staging/production before documenting customer-facing guarantees.
 
-## Canonical UI Spec
+## Canonical UI spec (internal)
 
-Use:
+If your org maintains a separate UI spec file (e.g. `UI-OVERHAUL-SPEC.md`), keep it as the visual source of truth; this page tracks **routing and integration** alignment.
 
-- `C:/Users/music/My Drive/RapidLeads/System Docs/UI-OVERHAUL-SPEC.md`
+Suggested product tour order for demos:
 
-Primary build order:
+1. **Connections / Accounts** — `client/src/pages/Accounts.tsx` (route `/accounts`)
+2. **Strategy Workspace** — `client/src/pages/Workspace.tsx` (`/workspace`)
+3. **Command Center** — `client/src/pages/CommandCenter.tsx` (`/command-center`, also `/dashboard`)
+4. **Files** — `client/src/pages/Files.tsx` (`/files`)
+5. **Campaigns** — `client/src/pages/Campaigns.tsx` (`/campaigns`)
+6. **Adros CEO** — `client/src/pages/Ceo.tsx` (`/ceo`)
 
-1. Command Center
-2. Chat Panel
-3. Campaign Metrics
-4. Approvals
-5. File Browser
+## Frontend implementation snapshot (`adros-app`)
 
-## Frontend Implementation Snapshot (adros-app)
+Primary routes are declared in `client/src/App.tsx`:
 
-Implemented in `c:\Cursor Projects\Adros\adros-app`:
+- Command Center: `CommandCenter` at `/dashboard` and `/command-center`
+- Strategy Workspace: `Workspace` at `/workspace`
+- Chat panel (in Command Center layout): `client/src/components/command-center/ChatPanel.tsx`
+- Campaign metrics: `client/src/pages/Campaigns.tsx`
+- Approvals page: `client/src/pages/Approvals.tsx` (`/approvals`)
+- Files: `client/src/pages/Files.tsx` (`/files`)
+- CEO: `client/src/pages/Ceo.tsx` (`/ceo`)
+- API helpers: `client/src/lib/api.ts`
+- Sidebar / nav: `client/src/components/DashboardLayout.tsx`
 
-- Command Center: `client/src/pages/Dashboard.tsx`
-- Chat panel: `client/src/components/command-center/ChatPanel.tsx`
-- Campaign metrics redesign: `client/src/pages/Campaigns.tsx`
-- Approvals page: `client/src/pages/Approvals.tsx`
-- Files page (placeholder): `client/src/pages/Files.tsx`
-- API helper expansion: `client/src/lib/api.ts`
-- Route wiring: `client/src/App.tsx`
-- Sidebar nav updates: `client/src/components/DashboardLayout.tsx`
+Legacy or parallel: `client/src/pages/Dashboard.tsx` may still exist in some branches; **the routed Command Center entrypoint is `CommandCenter.tsx`.**
 
-## Rollback Safety
+## Rollback safety
 
-Backup snapshots are in:
+If your repo keeps backup snapshots under `adros-app/backups/`, use them only for emergency rollback — prefer git history for normal work.
 
-- `c:\Cursor Projects\Adros\adros-app\backups\ui-overhaul-2026-04-10\`
+## Immediate next step
 
-Includes pre-overhaul copies of:
-
-- `Dashboard.tsx`
-- `Campaigns.tsx`
-- `DashboardLayout.tsx`
-- `App.tsx`
-- `api.ts`
-
-## Immediate Next Step
-
-Pure frontend completion + deployment validation:
-
-- run full local check/build where toolchain is complete
-- verify `/dashboard`, `/campaigns`, `/approvals`, `/files`
-- deploy frontend once smoke test passes
-
+- Run local build/smoke on `adros-app` and hit the routes above against your target API base URL.
+- After Railway/Vercel deploy, confirm **Files** upload + **Command Center** timeline + **Campaigns** scope notices on a real test client.
