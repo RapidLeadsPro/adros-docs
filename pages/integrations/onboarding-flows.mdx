@@ -4,7 +4,7 @@
 **Author:** Adros team
 **Purpose:** Define the two onboarding journeys so an orchestration layer knows exactly who to trigger, in what order, with what handoff artifacts. Both journeys share the same backbone — only the starting phase differs.
 
-> **Pattern (external stack):** the operator may work through an **optional** orchestration layer (OpenClaw, a custom MCP host, or another proprietary conductor). That layer routes; Adros is the marketing brain and execution plane. Research lanes (Perplexity, Manus, or custom tools) feed findings back; the conductor’s own task tracker holds cross-tool state when you use one.
+> **Pattern (external stack):** the operator may work through an **optional** orchestration layer (OpenClaw, a custom MCP host, or another proprietary conductor). That layer routes; Adros is the marketing brain and execution plane. **Research lanes** (for example **Perplexity**, web crawl via **Firecrawl** or similar, and other MCP-capable tools you choose) feed findings back; the conductor’s own task tracker holds cross-tool state when you use one.
 >
 > **Pattern (native Adros):** the operator uses **Adros CEO + Command Center**; routing and tasks still land on the same backend — there is no requirement for an external orchestration layer. See [Terminology (April 2026)](#terminology-april-2026) below.
 
@@ -65,7 +65,7 @@ Operator ──► Conductor
          │    - asks the operator 5 questions (or pulls from chat history if already given)
          │    - website, niche, offer, budget range, goals
          │
-         ├──► [RESEARCH] Manus (research lane)
+         ├──► [RESEARCH] Research lane (e.g. Perplexity + crawl tools)
          │    Task: "Full onboarding research for [client]"
          │    Brief from Adros: GET /me/onboarding/brief?url=...
          │    Deliverables:
@@ -78,9 +78,9 @@ Operator ──► Conductor
          │
          ├──► [INGEST] Adros (Adros CMO)
          │    Call path:
-         │      - build_brand_profile(url) if Manus output missing brand bits
+         │      - build_brand_profile(url) if research output missing brand bits
          │      - save_business_context(business_name, website, USP, ...)
-         │      - save_persona(...) for each persona from Manus
+         │      - save_persona(...) for each persona from research JSON
          │      - upload_brand_asset(...) for logo/colors
          │
          ├──► [ANALYSIS] Adros (Adros CMO)
@@ -118,7 +118,7 @@ Operator ──► Conductor
 | Phase | Specialist | Tool/System | Artifact |
 |---|---|---|---|
 | Intake | Conductor (direct) | WhatsApp + conductor task tracker | Intake notes on issue |
-| Research | **Manus** (bridge) | Web crawl + synthesis | Research JSON + optional PDF |
+| Research | **Research bridge** (Perplexity / Firecrawl / your stack) | Web crawl + synthesis | Research JSON + optional PDF |
 | Ingest | Adros CMO | `save_business_context`, `save_persona`, `build_brand_profile` | Populated Adros DB |
 | Keyword/Market research | Adros CMO | `research_keywords`, `competitor_gap`, etc. | `.xlsx` research file |
 | Structure | Adros (Adros Deployer) | `meta_campaign_build` / `google_campaign_build` workflow | `.xlsx` structure file |
@@ -162,18 +162,18 @@ Operator ──► Conductor
          │    Output: [BusinessName]_Meta_Ads_Audit.xlsx (6 tabs)
          │            Health score, top wins, top issues
          │
-         ├──► [RESEARCH] Manus (research lane) — CONDITIONAL
+         ├──► [RESEARCH] Research lane — CONDITIONAL
          │    Only if audit reveals gaps:
          │      - weak competitive differentiation
          │      - missing persona understanding
          │      - unexplored angles
-         │    Manus does competitor teardown + persona refresh
+         │    Perplexity / crawl-backed synthesis for competitor + persona refresh
          │    (Skip if Adros audit already has enough context)
          │
          ├──► [INGEST] Adros CMO
          │    Backfill business_context + personas from:
          │      - audit data (what's working = real personas)
-         │      - Manus research (if run)
+         │      - supplemental research JSON (if run)
          │      - build_brand_profile(url) for brand assets
          │
          ├──► [STRUCTURE/FIXES] Adros (Adros Deployer) ◄── DIFFERENT SHAPE
@@ -210,7 +210,7 @@ Operator ──► Conductor
 | Intake | Conductor | WhatsApp | Minimal context |
 | Connect | Client + Adros | OAuth flow | Access granted |
 | **Audit** | **Adros CMO** | `meta_audit` / `google_audit` workflow | Audit `.xlsx` + health score |
-| Research (conditional) | Manus | Same as Journey A | Research JSON |
+| Research (conditional) | Research bridge | Same as Journey A | Research JSON |
 | Ingest | Adros CMO | Same memory tools | Populated Adros DB |
 | Reallocation | Adros (Adros Deployer) | Audit `.xlsx` Tab 5/6 | Part of audit file |
 | Creative refresh (conditional) | Adros CD | `creative_only` workflow | New copy + images |
@@ -226,15 +226,15 @@ This is what an external conductor needs for routing: every phase produces a **n
 
 | Artifact | Produced by | Consumed by | Format |
 |---|---|---|---|
-| `[Client]_Research.json` | Manus | Adros (ingest) | JSON schema (see §6) |
-| `[Client]_Brand_Assets/` | Manus / Adros `build_brand_profile` | Adros CD | Folder in Adros DAM |
+| `[Client]_Research.json` | Research bridge (Perplexity / crawl / other tools) | Adros (ingest) | JSON schema (see §6) |
+| `[Client]_Brand_Assets/` | Research bridge / Adros `build_brand_profile` | Adros CD | Folder in Adros DAM |
 | `[Client]_Keyword_Research.xlsx` | Adros CMO | Structure phase | Excel, template-controlled |
 | `[Client]_Market_Research.xlsx` | Adros CMO | Structure phase | Excel |
 | `[Client]_Meta_Ads_Audit.xlsx` | Adros CMO | Adros Deployer (execute) | Excel, 6 tabs |
 | `[Client]_Meta_Ads_Structure.xlsx` | Adros CMO | Adros CD | Excel, 6 tabs |
 | `[Client]_Meta_Ads_Copy.xlsx` | Adros CD | Adros Deployer (launch) | Excel |
 | Generated creatives (images) | Adros CD (via nano_banana_pro) | Adros Deployer (launch) | PNG in Adros DAM |
-| `[Client]_Monthly_Report.pptx` | **Manus** (design lane) | Conductor → Operator | PPT, templated |
+| `[Client]_Monthly_Report.pptx` | **Operator or external deck pipeline** | Conductor → Operator | PPT, templated |
 
 **Important:** all `.xlsx` templates are controlled by Adros via `get_output_template(template_type)`. The conductor should not hand-roll these schemas — it calls Adros, Adros returns the template spec, specialists fill it.
 
@@ -251,8 +251,8 @@ Operator: "onboard [client]"
   │   │
   │   ├─ NO  → Journey A (fresh)
   │   │        - Create a parent tracker item with 8 subtasks
-  │   │        - assign_and_wake → Manus bridge (research)
-  │   │        - On Manus completion → assign_and_wake → Adros CMO (ingest + keyword research)
+  │   │        - assign_and_wake → research bridge (Perplexity / crawl / stack)
+  │   │        - On research completion → assign_and_wake → Adros CMO (ingest + keyword research)
   │   │        - On completion → assign_and_wake → Adros Deployer (structure)
   │   │        - On completion → assign_and_wake → Adros CD
   │   │        - On completion → notify operator for approval
@@ -266,7 +266,7 @@ Operator: "onboard [client]"
   │            - Branch: if audit flags creative fatigue
   │              → assign_and_wake → Adros CD
   │            - Branch: if audit flags weak positioning
-  │              → assign_and_wake → Manus (research refresh)
+  │              → assign_and_wake → research lane (Perplexity / supplemental tools)
   │            - Converge → notify operator for approval
   │            - On approval → assign_and_wake → Adros Deployer (execute fixes)
   │            - Monitoring already running, just resume
@@ -276,19 +276,20 @@ Operator: "onboard [client]"
 1. **Every `assign_and_wake` should advance the conductor’s task state** — avoid side channels outside the tracker
 2. **Every phase completion closes its subtask + creates the next one** — Conductor reacts to tracker events (prefer event-driven updates over tight polling)
 3. **The operator is only pinged at APPROVAL gates** — not for intermediate phase completions
-4. **Manus is optional in Journey B** — audit data often replaces fresh research
+4. **Supplemental research is optional in Journey B** — audit data often replaces a full fresh research pass
 
 ---
 
-## 6. Manus bridge contract (orchestration layer)
+## 6. Research bridge contract (orchestration layer)
 
-Manus is third-party. For it to slot into Conductor routing, implement a small bridge with this contract:
+Adros does **not** prescribe a single vendor for the research lane. Current direction is **Perplexity** (and similar LLM-backed research APIs) plus **crawl / extraction tools** (for example **Firecrawl** or equivalents) and any other MCP-capable tools your conductor wires in. Whatever stack you use, expose a **thin bridge** so Conductor routing stays the same: one JSON contract in, one JSON contract out, then Adros ingest.
 
 ### Input (Orchestration → Research Bridge)
 ```json
 {
   "task_id": "<task-ledger-issue-id>",
   "task_type": "onboarding_research" | "monthly_report_design",
+  "research_stack": ["perplexity", "firecrawl"],
   "client": {
     "name": "Acme Travel",
     "website": "https://example.com",
@@ -299,6 +300,8 @@ Manus is third-party. For it to slot into Conductor routing, implement a small b
   "deadline": "2026-01-15T00:00:00Z"
 }
 ```
+
+`research_stack` is illustrative — omit or replace with the tools your org actually calls.
 
 ### Output (Bridge → Conductor)
 ```json
@@ -324,14 +327,14 @@ Manus is third-party. For it to slot into Conductor routing, implement a small b
 ```
 
 ### Bridge responsibilities
-1. Expose a wakeup endpoint `POST /bridge/manus/wake` so Conductor `assign_and_wake` works uniformly
-2. Translate the conductor’s tracker row → Manus API call (or browser automation if no API)
-3. Poll Manus for completion (or receive Manus webhook if supported)
-4. Validate output against schema before marking complete
-5. Post completion back to the conductor’s task tracker (comments + attachments)
-6. Call Adros ingest endpoint with structured payload
+1. Expose a wakeup endpoint (for example `POST /bridge/research/wake`) so Conductor `assign_and_wake` works uniformly across tools.
+2. Translate the conductor’s tracker row → calls to your research stack (Perplexity API, crawl job, other MCP tools — **not** a deprecated third-party research UI).
+3. Track completion via each provider’s callback/webhook or polling, then normalize into the output shape above.
+4. Validate output against `output_schema` before marking the tracker step complete.
+5. Post completion back to the conductor’s task tracker (comments + attachments).
+6. Call the Adros ingest endpoint with the structured payload.
 
-**If Manus has no public API**, the bridge can use a supervised browser session (for example Playwright) so the external contract from Conductor’s perspective stays unchanged.
+If a provider has no clean API, the bridge may still use a **supervised automation** path — but the **external contract** from Conductor’s view should remain this JSON; swap implementations behind the bridge as tools change.
 
 ---
 
@@ -355,9 +358,9 @@ Coordinate rollout with your backend team so bridges and APIs ship together.
 
 - Avoid hand-rolling research briefs when Adros can supply them via `/me/onboarding/brief` — Adros owns the marketing cognition.
 - Avoid hand-rolling `.xlsx` schemas — call Adros `get_output_template`. Templates are versioned on the Adros side.
-- Avoid putting Manus in the critical webhook-handling path. Manus should stay bridge-gated. If the bridge is down, Journey A should stall at the research step while the operator is notified — the ads platform path should not depend on the research bridge for liveness.
-- Avoid polling for Manus completion in a tight loop; prefer webhooks or a slow janitor sweep.
-- For Manus-shaped work, route through the conductor’s task tracker so approvals and artifacts stay auditable alongside Adros task history.
+- Avoid putting the research bridge in the critical webhook-handling path for **live ads** alerts. Research should stay bridge-gated: if the bridge is down, Journey A can stall at the research step while the operator is notified — platform monitoring must not depend on the research lane for liveness.
+- Avoid polling for research completion in a tight loop; prefer provider webhooks or a slow janitor sweep.
+- Route research work through the conductor’s task tracker so approvals and artifacts stay auditable alongside Adros task history.
 
 ---
 
