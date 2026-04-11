@@ -37,7 +37,7 @@ Migration file: `api/db/migrations/021_client_lifecycle_state.sql`
 | `get_client_state(client_name)` | GET `/me/clients/{id}/state` |
 | `set_client_state(client_name, lifecycle_state, reason)` | PATCH `/me/clients/{id}/state` |
 
-REST is for your Python workers (admin-worker, data-analyst-worker). MCP is for LLM agents (Jarvis, Hermes, Creative Director) calling Adros via natural language.
+REST is for your Python workers and automation. MCP is for LLM clients calling Adros via natural language. Routed work maps to runtime actors: `adros_ceo`, `adros_cmo`, `adros_cd`, `adros_deployer` (see [Onboarding flows — Terminology](/integrations/onboarding-flows) and your internal runtime-actor canon).
 
 **Dashboard & orchestration REST:** The Contract endpoints above define **deliverable specs** and lifecycle **writeback**. Task inbox, event timelines, approvals, Strategy Workspace (snapshots, masters, stage review), Files, and deploy handoff use **additional** routes on the same `/api/v1` base — see [REST — Dashboard & Orchestration](/integrations/rest-dashboard).
 
@@ -114,11 +114,11 @@ GET /api/v1/contract/spec?stage=optimizing&task_type=weekly_review
     "approval_required": true,
     "notify_sam_threshold": "any creative_fatigue OR wasted_spend > $50 OR CPA > 1.5x target",
     "format": "xlsx + chat summary + action log",
-    "recommended_specialist": "Hermes",
+    "recommended_specialist": "adros_cmo",
     "next_stage": "optimizing",
     "review_gates": [
-      "Hermes craft review",
-      "Orchestration layer client-context review",
+      "Adros CMO optimization review",
+      "Orchestration client-context review",
       "Operator approval"
     ],
     "schema_version": "v1"
@@ -129,7 +129,7 @@ GET /api/v1/contract/spec?stage=optimizing&task_type=weekly_review
 POST {task-ledger}/issues
 {
   "title": "[Acme Travel] Weekly review — week of Jan 13",
-  "assignee": "Hermes",  # from spec.recommended_specialist
+  "assignee": "adros_cmo",  # from spec.recommended_specialist (runtime actor id)
   "metadata": {
     "adros_spec": <full spec from step 2>,
     "client_id": "<client-uuid>",
@@ -199,12 +199,12 @@ GET /api/v1/contract/spec?stage=intake&task_type=gather_business_context
     "produce": ["business_context_record", "personas_seed"],
     "adros_tools": ["get_intake_questions", "save_business_context", "save_persona"],
     "approval_required": false,
-    "recommended_specialist": "Admin",
+    "recommended_specialist": "adros_ceo",
     "next_stage": "research",
     ...
   }
 
-# 4. The Admin specialist runs the intake conversation with the operator,
+# 4. The operator or Adros CEO runs the intake conversation,
 #    saves business context + personas via the listed adros_tools, then
 #    writes findings back.
 
@@ -220,19 +220,19 @@ PATCH /api/v1/me/clients/<client-uuid>/state
 
 ## Available specs (v1)
 
-| Stage | Task type | Specialist | Approval? |
+| Stage | Task type | Owner (`recommended_specialist`) | Approval? |
 |---|---|---|---|
-| `intake` | `gather_business_context` | Admin | No |
-| `intake` | `build_brand_profile` | Admin | No |
-| `research` | `keyword_research` | Data Analyst | No |
-| `research` | `market_research` | Data Analyst | **Yes** |
-| `creative` | `generate_creatives` | Creative Director | **Yes** |
-| `approved` | `launch_campaigns` | Hermes | No |
-| `live` | `first_week_check` | Data Analyst | No |
-| `optimizing` | `weekly_review` | Hermes | **Yes** |
-| `optimizing` | `creative_refresh` | Creative Director | **Yes** |
-| `optimizing` | `search_term_audit` | Hermes | **Yes** |
-| `optimizing` | `budget_reallocation` | Hermes | **Yes** |
+| `intake` | `gather_business_context` | `adros_ceo` | No |
+| `intake` | `build_brand_profile` | `adros_ceo` | No |
+| `research` | `keyword_research` | `adros_cmo` | No |
+| `research` | `market_research` | `adros_cmo` | **Yes** |
+| `creative` | `generate_creatives` | `adros_cd` | **Yes** |
+| `approved` | `launch_campaigns` | `adros_deployer` | No |
+| `live` | `first_week_check` | `adros_cmo` | No |
+| `optimizing` | `weekly_review` | `adros_cmo` | **Yes** |
+| `optimizing` | `creative_refresh` | `adros_cd` | **Yes** |
+| `optimizing` | `search_term_audit` | `adros_cmo` | **Yes** |
+| `optimizing` | `budget_reallocation` | `adros_cmo` | **Yes** |
 
 Call `GET /api/v1/contract/specs` with no filter to get the full list at runtime, or filter by `?stage=<state>` to get only the specs for one lifecycle stage.
 

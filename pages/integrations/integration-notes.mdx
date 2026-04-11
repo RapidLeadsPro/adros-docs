@@ -4,7 +4,7 @@
 **Author:** Adros team
 **Purpose:** Flag blind spots and integration gaps that every orchestration-layer builder should account for when wiring Adros into a larger agent stack.
 
-> **Note:** This document was originally written as a handoff between the Adros team and orchestration-layer engineers. Language like "your side" refers to whoever owns the orchestration layer (Jarvis, Paperclip, OpenClaw, or a custom runtime). If you're building such a layer, read it as advice directed at you.
+> **Note:** This document was originally written as a handoff between the Adros team and orchestration-layer engineers. Language like "your side" refers to whoever owns the orchestration layer (Paperclip, OpenClaw, or a custom runtime). If you're building such a layer, read it as advice directed at you.
 
 ---
 
@@ -12,7 +12,7 @@
 
 Adros is a **hybrid marketing OS**: FastAPI on Railway, React dashboard on Vercel, Supabase Postgres, Cloudflare R2 for scoped files, plus MCP (Streamable HTTP). It holds **4,022** enriched patterns, memory, creative generation, daily autonomous monitoring (6 checks; webhook to your URL), and **first-class operator workflows** on [app.adros.ai](https://app.adros.ai): **Command Center** (tasks, event timeline, approvals, blockers, comments/follow-ups), **Strategy Workspace** (staged artifacts, masters, deploy handoff), **Files**, **Campaigns**, and **Adros CEO** (routing into tracked work). **Tasks and events are the system of record** whether work starts in the UI or via MCP.
 
-If you run **Paperclip, OpenClaw, Jarvis, or custom** conductors on top, they still make sense: Adros remains the **marketing capability + data plane**; your layer can own *cross-tool* sequencing, human assignment, or policies Adros does not encode. You are not required to use an external orchestrator to get coordination—native dashboards cover much of it— but many enterprise setups still want both.
+If you run **Paperclip, OpenClaw, or custom** conductors on top, they still make sense: Adros remains the **marketing capability + data plane**; your layer can own *cross-tool* sequencing, human assignment, or policies Adros does not encode. You are not required to use an external orchestrator to get coordination—native dashboards cover much of it— but many enterprise setups still want both.
 
 ---
 
@@ -59,7 +59,7 @@ If you run **Paperclip, OpenClaw, Jarvis, or custom** conductors on top, they st
 
 ### 2.2 Inbound: Adros MCP (Specialists → Adros)
 
-Specialists (Creative Director, Hermes, Data Analyst) connect to Adros via MCP over Streamable HTTP. They call tools like `build_creative_prompt`, `generate_creative`, `match_strategy`, `list_insights`, `google_campaign_performance_report`, etc. Auth is per-user token resolved from MCP context.
+MCP clients connect to Adros over Streamable HTTP as the signed-in user and call tools (`build_creative_prompt`, `generate_creative`, `match_strategy`, `list_insights`, `google_campaign_performance_report`, etc.). **Native** routed work uses runtime actor IDs (`adros_cmo`, `adros_cd`, `adros_deployer`, `adros_ceo`) — legacy names like **Hermes** or a standalone **Data Analyst** agent are obsolete.
 
 **This path does NOT go through your webhook.** It's pull-based: the specialist decides when to call Adros.
 

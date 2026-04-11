@@ -20,7 +20,7 @@
 
 - **Marketing brain:** 4,022-pattern database, memory layer, creative pipeline, daily autonomous monitor. Specialists and MCP clients call Adros to "think like marketers" and act on Meta/Google through wrapped tools (not thin generic proxies).
 - **Orchestration surfaces:** `app.adros.ai` includes **Command Center** (client-scoped task inbox, live event timeline, approvals), **Strategy Workspace** (staged strategy/creative artifacts and masters), **Files** (R2-backed, scoped storage), **Campaigns** (live metrics when accounts are connected), **Adros CEO** (coordination/routing), plus chat where wired. Tasks and events are the **system of record** for automation runs — whether the trigger came from the UI or MCP.
-- **External orchestration:** Many customers still pair Adros with Jarvis, Paperclip, OpenClaw, or custom conductors. That is fine: Adros remains the **marketing capability + data plane**; the conductor owns cross-tool sequencing if you want it outside Adros.
+- **External orchestration:** Many customers still pair Adros with Paperclip, OpenClaw, or custom conductors. That is fine: Adros remains the **marketing capability + data plane**; the conductor owns cross-tool sequencing if you want it outside Adros.
 
 **Mental model in one sentence:** *Adros = marketing intelligence + execution hands + **traceable tasks/events/files** on one backend. External orchestrators = optional conductors around that plane.*
 
@@ -87,7 +87,7 @@ One row per (user_id, client_id). `client_id=NULL` = solo mode. Fields:
 - `competitors[]`, `positioning`, `unique_value_prop`
 - `can_say[]`, `cannot_say[]` — brand voice constraints
 - `goals[]`, `monthly_budget`, `customer_journey`
-- `raw_research` (JSONB) — Manus/Data Analyst findings land here
+- `raw_research` (JSONB) — Manus or research-lane findings land here
 - **Compliance gate fields:** `landing_page_url`, `landing_page_type` (`url|lead_form|none`), `conversion_source` (`platform|cometly|both`), `brand_colors`, `tone_of_voice`, `industry`, `ad_language` (`en|zh|ms|en,zh`)
 
 ### `personas` — `api/models/memory.py`
@@ -380,7 +380,7 @@ Each check produces 0+ issues. All wrapped in try/except — one check failing d
     "action": str,                # what to do
     "link": str,                  # direct URL to fix
     "client_name": str,           # 'default' for solo, account_id for agency
-    "recommended_specialist": str,  # "Hermes" | "Creative Director" | "Data Analyst" | "Admin"
+    "recommended_specialist": str,  # runtime actor id: adros_ceo | adros_cmo | adros_cd | adros_deployer
     "notify_sam": bool,           # legacy field name — "True if the human operator should be pinged immediately"
     "metrics": dict,              # structured metrics for routing logic
     "dedupe_key": str,            # 16-char sha256 hash (see below)
@@ -396,7 +396,7 @@ Each check produces 0+ issues. All wrapped in try/except — one check failing d
 dedupe_input = f"{alert_type}:{client_name}:{headline}".lower()
 dedupe_key = hashlib.sha256(dedupe_input.encode()).hexdigest()[:16]
 ```
-Same alert type + same client + same headline = same dedupe_key. OpenClaw should use this as the authoritative dedupe identifier.
+Same alert type + same client + same headline = same dedupe_key. Your webhook receiver should use this as the authoritative dedupe identifier.
 
 ### Webhook payload v1.1 (exact shape from `_send_monitoring_webhook`)
 ```json
@@ -615,7 +615,7 @@ If any of these drift, re-verify against the live repo. I'll update this doc whe
 
 ## 15. TL;DR (if you read nothing else)
 
-- **Adros = hybrid marketing OS:** marketing brain (patterns, memory, creative, monitor) **plus** dashboard orchestration (tasks, timeline, approvals, workspace, files, campaigns). External stacks (Jarvis, Paperclip, etc.) remain optional conductors.
+- **Adros = hybrid marketing OS:** marketing brain (patterns, memory, creative, monitor) **plus** dashboard orchestration (tasks, timeline, approvals, workspace, files, campaigns). External stacks (Paperclip, OpenClaw, custom) remain optional conductors.
 - **Backend:** FastAPI 0.3.0 on Railway at `api.adros.ai`. Postgres via Supabase. **Files / audit blobs:** R2.
 - **MCP:** 74 tools at `/mcp`, Streamable HTTP, auth via `X-User-Token`.
 - **REST:** all under `/api/v1/*`, JWT auth, `/me/monitoring/webhook` for config.
