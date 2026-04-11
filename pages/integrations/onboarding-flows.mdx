@@ -4,9 +4,11 @@
 **Author:** Adros team
 **Purpose:** Define the two onboarding journeys so an orchestration layer knows exactly who to trigger, in what order, with what handoff artifacts. Both journeys share the same backbone — only the starting phase differs.
 
-> **Pattern (external stack):** the operator may work through an **optional** orchestration layer (OpenClaw, a custom MCP host, or another proprietary conductor). That layer routes; Adros is the marketing brain and execution plane. **Research lanes** (for example **Perplexity**, web crawl via **Firecrawl** or similar, and other MCP-capable tools you choose) feed findings back; the conductor’s own task tracker holds cross-tool state when you use one.
+> **Pattern (external stack):** the operator may work through an **optional** orchestration layer (OpenClaw, a custom MCP host, or another proprietary conductor). That layer routes; Adros is the marketing brain and execution plane. **Research lanes** (for example an external LLM research API, web crawl via **Firecrawl** or similar, and other MCP-capable tools you choose) feed findings back; the conductor’s own task tracker holds cross-tool state when you use one.
 >
 > **Pattern (native Adros):** the operator uses **Adros CEO + Command Center**; routing and tasks still land on the same backend — there is no requirement for an external orchestration layer. See [Terminology (April 2026)](#terminology-april-2026) below.
+
+> **Research stack truth:** product direction is **Perplexity + DataForSEO + Firecrawl + platform-native data**. Firecrawl/DataForSEO are already strongly represented in the current repo/runtime; verify the exact deployed Perplexity provider path before documenting a specific environment as fully live-native.
 
 > **See also (native Adros):** Operators can also run the same backbone through **Command Center** and **Strategy Workspace** on [app.adros.ai](https://app.adros.ai), with tasks, approvals, workspace masters, and files on the same backend. REST routes for those surfaces are indexed in [REST — Dashboard & Orchestration](/integrations/rest-dashboard). For how that coexists with external conductors, read [Integration Notes — §1](/integrations/integration-notes).
 
@@ -65,7 +67,7 @@ Operator ──► Conductor
          │    - asks the operator 5 questions (or pulls from chat history if already given)
          │    - website, niche, offer, budget range, goals
          │
-         ├──► [RESEARCH] Research lane (e.g. Perplexity + crawl tools)
+         ├──► [RESEARCH] Research lane (e.g. external LLM research API + crawl tools)
          │    Task: "Full onboarding research for [client]"
          │    Brief from Adros: GET /me/onboarding/brief?url=...
          │    Deliverables:
@@ -118,7 +120,7 @@ Operator ──► Conductor
 | Phase | Specialist | Tool/System | Artifact |
 |---|---|---|---|
 | Intake | Conductor (direct) | WhatsApp + conductor task tracker | Intake notes on issue |
-| Research | **Research bridge** (Perplexity / Firecrawl / your stack) | Web crawl + synthesis | Research JSON + optional PDF |
+| Research | **Research bridge** (external LLM research API / Firecrawl / your stack) | Web crawl + synthesis | Research JSON + optional PDF |
 | Ingest | Adros CMO | `save_business_context`, `save_persona`, `build_brand_profile` | Populated Adros DB |
 | Keyword/Market research | Adros CMO | `research_keywords`, `competitor_gap`, etc. | `.xlsx` research file |
 | Structure | Adros (Adros Deployer) | `meta_campaign_build` / `google_campaign_build` workflow | `.xlsx` structure file |
@@ -167,7 +169,7 @@ Operator ──► Conductor
          │      - weak competitive differentiation
          │      - missing persona understanding
          │      - unexplored angles
-         │    Perplexity / crawl-backed synthesis for competitor + persona refresh
+         │    external LLM research / crawl-backed synthesis for competitor + persona refresh
          │    (Skip if Adros audit already has enough context)
          │
          ├──► [INGEST] Adros CMO
@@ -226,7 +228,7 @@ This is what an external conductor needs for routing: every phase produces a **n
 
 | Artifact | Produced by | Consumed by | Format |
 |---|---|---|---|
-| `[Client]_Research.json` | Research bridge (Perplexity / crawl / other tools) | Adros (ingest) | JSON schema (see §6) |
+| `[Client]_Research.json` | Research bridge (external LLM research / crawl / other tools) | Adros (ingest) | JSON schema (see §6) |
 | `[Client]_Brand_Assets/` | Research bridge / Adros `build_brand_profile` | Adros CD | Folder in Adros DAM |
 | `[Client]_Keyword_Research.xlsx` | Adros CMO | Structure phase | Excel, template-controlled |
 | `[Client]_Market_Research.xlsx` | Adros CMO | Structure phase | Excel |
@@ -251,7 +253,7 @@ Operator: "onboard [client]"
   │   │
   │   ├─ NO  → Journey A (fresh)
   │   │        - Create a parent tracker item with 8 subtasks
-  │   │        - assign_and_wake → research bridge (Perplexity / crawl / stack)
+  │   │        - assign_and_wake → research bridge (external LLM research / crawl / stack)
   │   │        - On research completion → assign_and_wake → Adros CMO (ingest + keyword research)
   │   │        - On completion → assign_and_wake → Adros Deployer (structure)
   │   │        - On completion → assign_and_wake → Adros CD
@@ -266,7 +268,7 @@ Operator: "onboard [client]"
   │            - Branch: if audit flags creative fatigue
   │              → assign_and_wake → Adros CD
   │            - Branch: if audit flags weak positioning
-  │              → assign_and_wake → research lane (Perplexity / supplemental tools)
+  │              → assign_and_wake → research lane (external LLM research / supplemental tools)
   │            - Converge → notify operator for approval
   │            - On approval → assign_and_wake → Adros Deployer (execute fixes)
   │            - Monitoring already running, just resume
@@ -282,14 +284,14 @@ Operator: "onboard [client]"
 
 ## 6. Research bridge contract (orchestration layer)
 
-Adros does **not** prescribe a single vendor for the research lane. Current direction is **Perplexity** (and similar LLM-backed research APIs) plus **crawl / extraction tools** (for example **Firecrawl** or equivalents) and any other MCP-capable tools your conductor wires in. Whatever stack you use, expose a **thin bridge** so Conductor routing stays the same: one JSON contract in, one JSON contract out, then Adros ingest.
+Adros does **not** prescribe a single vendor lock beyond the intended research mix. Product direction is **Perplexity + DataForSEO + Firecrawl + platform-native data**. If your environment wires Perplexity through an external conductor/bridge first, that is still acceptable; just keep the contract stable. Whatever stack shape you use, expose a **thin bridge** so Conductor routing stays the same: one JSON contract in, one JSON contract out, then Adros ingest.
 
 ### Input (Orchestration → Research Bridge)
 ```json
 {
   "task_id": "<task-ledger-issue-id>",
   "task_type": "onboarding_research" | "monthly_report_design",
-  "research_stack": ["perplexity", "firecrawl"],
+  "research_stack": ["external_llm_research", "firecrawl"],
   "client": {
     "name": "Acme Travel",
     "website": "https://example.com",
@@ -328,7 +330,7 @@ Adros does **not** prescribe a single vendor for the research lane. Current dire
 
 ### Bridge responsibilities
 1. Expose a wakeup endpoint (for example `POST /bridge/research/wake`) so Conductor `assign_and_wake` works uniformly across tools.
-2. Translate the conductor’s tracker row → calls to your research stack (Perplexity API, crawl job, other MCP tools — **not** a deprecated third-party research UI).
+2. Translate the conductor’s tracker row → calls to your research stack (Perplexity API if you use it, another LLM research API, crawl job, other MCP tools — **not** a deprecated third-party research UI).
 3. Track completion via each provider’s callback/webhook or polling, then normalize into the output shape above.
 4. Validate output against `output_schema` before marking the tracker step complete.
 5. Post completion back to the conductor’s task tracker (comments + attachments).
