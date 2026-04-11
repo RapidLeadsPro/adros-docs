@@ -44,7 +44,7 @@ Every client onboarding — fresh or existing — follows this 8-step backbone. 
 [8] MONITOR       → daily Adros webhook → Conductor → specialist loop
 ```
 
-Adros already has **9 workflow guides** encoding this backbone (see `adros/api/services/workflow_guides.py`). Conductor doesn't need to reinvent it — Conductor just calls `get_workflow_guide(type)` at the right moment and routes work accordingly.
+Adros already has **8 workflow guides** encoding this backbone (see `adros/api/services/workflow_guides.py`). Conductor doesn't need to reinvent it — Conductor just calls `get_workflow_guide(type)` at the right moment and routes work accordingly.
 
 ---
 
@@ -69,7 +69,11 @@ Operator ──► Conductor
          │
          ├──► [RESEARCH] Research lane (e.g. external LLM research API + crawl tools)
          │    Task: "Full onboarding research for [client]"
-         │    Brief from Adros: GET /me/onboarding/brief?url=...
+         │    Brief from Adros:
+         │      - use saved intake + business context if already captured
+         │      - call `build_brand_profile(url)` when website extraction helps
+         │      - call `get_intake_questions(...)` when business context is still thin
+         │    NOTE: there is no dedicated `/me/onboarding/brief` endpoint today
          │    Deliverables:
          │      - website crawl (about, pricing, offer, tone)
          │      - top 5 competitor teardown
@@ -103,13 +107,18 @@ Operator ──► Conductor
          │
          ├──► [APPROVAL] Conductor → Operator
          │    Package: structure + copy + sample creatives
-         │    Operator approves / edits / rejects in WhatsApp
+         │    Operator approves / edits / rejects in the chosen client channel
+         │    (for example WhatsApp, email, or native Adros surfaces)
          │
          ├──► [LAUNCH] Adros Deployer specialist
          │    Requires: client's ad account connected to Adros
          │    Tools: create_campaign, create_ad_set, create_ad, create_ad_creative
          │    (If ad account not ready: Conductor pauses, notifies operator,
          │     creates "connect ad account" task for client onboarding)
+         │    Current native deploy truth: live apply is still a bounded v1 scope.
+         │    Status changes, budget changes, keywords, negatives, and some asset-link
+         │    actions are strongest today; asset upload and broader mutations may return
+         │    a blocker instead of executing automatically.
          │
          └──► [MONITOR] Adros daily webhook (8am SGT)
               Starts delivering alerts → Conductor → routes per alert type
@@ -119,13 +128,13 @@ Operator ──► Conductor
 
 | Phase | Specialist | Tool/System | Artifact |
 |---|---|---|---|
-| Intake | Conductor (direct) | WhatsApp + conductor task tracker | Intake notes on issue |
+| Intake | Conductor (direct) | Operator channel + conductor task tracker | Intake notes on issue |
 | Research | **Research bridge** (external LLM research API / Firecrawl / your stack) | Web crawl + synthesis | Research JSON + optional PDF |
 | Ingest | Adros CMO | `save_business_context`, `save_persona`, `build_brand_profile` | Populated Adros DB |
 | Keyword/Market research | Adros CMO | `research_keywords`, `competitor_gap`, etc. | `.xlsx` research file |
-| Structure | Adros (Adros Deployer) | `meta_campaign_build` / `google_campaign_build` workflow | `.xlsx` structure file |
+| Structure | Adros CMO | `meta_campaign_build` / `google_campaign_build` workflow | `.xlsx` structure file |
 | Creative | Adros CD | `match_strategy` → `build_creative_prompt` → `generate_creative` | `.xlsx` copy + images |
-| Approval | Conductor | Conductor task tracker + WhatsApp | Operator's decision |
+| Approval | Conductor | Conductor task tracker + client communication channel | Operator's decision |
 | Launch | Adros (Adros Deployer) | MCP write tools (create_campaign, etc.) | Live campaigns |
 | Monitor | Adros cron + webhook | Daily monitor → Conductor receiver | Webhook alerts |
 
@@ -161,7 +170,7 @@ Operator ──► Conductor
          │      - list_campaigns, list_ad_sets, list_ads
          │      - list_insights (30d, 7d, breakdowns)
          │      - audit_landing_page
-         │    Output: [BusinessName]_Meta_Ads_Audit.xlsx (6 tabs)
+         │    Output: [BusinessName]_Meta_Ads_Audit.xlsx (8 tabs)
          │            Health score, top wins, top issues
          │
          ├──► [RESEARCH] Research lane — CONDITIONAL
@@ -198,8 +207,11 @@ Operator ──► Conductor
          ├──► [EXECUTE] Adros Deployer specialist
          │    Tools: set_campaign_status (pause/enable),
          │           update_ad_set (budgets),
-         │           create_ad_creative (new creatives),
-         │           set_google_campaign_bidding_strategy
+          │           create_ad_creative (new creatives),
+          │           set_google_campaign_bidding_strategy
+         │    Manual blockers still matter here: OAuth reconnects, policy/TOS prompts,
+         │    domain verification, Merchant Center readiness, billing approval, and
+         │    asset-upload steps may pause execution until a human checks them off.
          │
          └──► [MONITOR] Adros daily webhook (continues)
               Already running — no separate "start monitor" step
@@ -209,14 +221,14 @@ Operator ──► Conductor
 
 | Phase | Specialist | Tool/System | Artifact |
 |---|---|---|---|
-| Intake | Conductor | WhatsApp | Minimal context |
+| Intake | Conductor | Operator channel | Minimal context |
 | Connect | Client + Adros | OAuth flow | Access granted |
 | **Audit** | **Adros CMO** | `meta_audit` / `google_audit` workflow | Audit `.xlsx` + health score |
 | Research (conditional) | Research bridge | Same as Journey A | Research JSON |
 | Ingest | Adros CMO | Same memory tools | Populated Adros DB |
 | Reallocation | Adros (Adros Deployer) | Audit `.xlsx` Tab 5/6 | Part of audit file |
 | Creative refresh (conditional) | Adros CD | `creative_only` workflow | New copy + images |
-| Approval | Conductor | Conductor task tracker + WhatsApp | Operator's decision |
+| Approval | Conductor | Conductor task tracker + client communication channel | Operator's decision |
 | Execute | Adros (Adros Deployer) | MCP write tools | Updated campaigns |
 | Monitor | Adros webhook | Daily loop | Alerts |
 
@@ -232,13 +244,15 @@ This is what an external conductor needs for routing: every phase produces a **n
 | `[Client]_Brand_Assets/` | Research bridge / Adros `build_brand_profile` | Adros CD | Folder in Adros DAM |
 | `[Client]_Keyword_Research.xlsx` | Adros CMO | Structure phase | Excel, template-controlled |
 | `[Client]_Market_Research.xlsx` | Adros CMO | Structure phase | Excel |
-| `[Client]_Meta_Ads_Audit.xlsx` | Adros CMO | Adros Deployer (execute) | Excel, 6 tabs |
+| `[Client]_Meta_Ads_Audit.xlsx` | Adros CMO | Adros Deployer (execute) | Excel, 8 tabs |
 | `[Client]_Meta_Ads_Structure.xlsx` | Adros CMO | Adros CD | Excel, 6 tabs |
 | `[Client]_Meta_Ads_Copy.xlsx` | Adros CD | Adros Deployer (launch) | Excel |
 | Generated creatives (images) | Adros CD (via nano_banana_pro) | Adros Deployer (launch) | PNG in Adros DAM |
-| `[Client]_Monthly_Report.pptx` | **Operator or external deck pipeline** | Conductor → Operator | PPT, templated |
+| `[Client]_Monthly_Report.pptx` | **Operator or external deck pipeline** | Conductor → Operator | PPT, templated target-state |
 
 **Important:** all `.xlsx` templates are controlled by Adros via `get_output_template(template_type)`. The conductor should not hand-roll these schemas — it calls Adros, Adros returns the template spec, specialists fill it.
+
+**Current export truth:** native Adros is strongest today on `.xlsx` artifacts, stored files, and audit PDF generation. PPT/DOCX-style executive exports should be treated as external or target-state unless your environment has added that report pipeline explicitly.
 
 ---
 
@@ -255,7 +269,7 @@ Operator: "onboard [client]"
   │   │        - Create a parent tracker item with 8 subtasks
   │   │        - assign_and_wake → research bridge (external LLM research / crawl / stack)
   │   │        - On research completion → assign_and_wake → Adros CMO (ingest + keyword research)
-  │   │        - On completion → assign_and_wake → Adros Deployer (structure)
+  │   │        - On completion → assign_and_wake → Adros CMO (structure)
   │   │        - On completion → assign_and_wake → Adros CD
   │   │        - On completion → notify operator for approval
   │   │        - On approval → assign_and_wake → Adros Deployer (launch)
