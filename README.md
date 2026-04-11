@@ -31,7 +31,7 @@ pages/
     ├── _meta.json                    # Integrations nav
     ├── overview.mdx                  # Adros Technical Overview
     ├── onboarding-flows.mdx          # Journey A vs Journey B
-    ├── integration-notes.mdx         # Integration blind spots
+    ├── integration-notes.mdx         # Integration patterns & pitfalls
     └── contract-layer.mdx            # Contract layer spec
 ```
 

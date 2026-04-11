@@ -1,9 +1,9 @@
 ---
-title: UI Handoff (2026-04-10)
-description: Frontend ↔ backend alignment for Adros dashboard. Command Center, Strategy Workspace, Files on R2, Campaigns, CEO — live routes and API expectations (verify on your deploy).
+title: Dashboard & frontend integration
+description: Dashboard routes and backend alignment for Adros. Command Center, Strategy Workspace, Files on R2, Campaigns, CEO — API expectations (verify on your deploy).
 ---
 
-# UI Handoff (2026-04-10)
+# Dashboard & frontend integration
 
 Audience: UI/UX engineers and frontend contributors; also useful for anyone documenting **what ships in `adros-app`** vs what is live on `app.adros.ai` after deploy.
 
@@ -37,9 +37,9 @@ Until your environment has R2 env vars configured (`R2_ACCOUNT_ID`, `R2_ACCESS_K
 
 Scorecards, guardrails, and artifact persistence depend on migration + `AUDIT_QUALITY_TRACK_ENABLED`. Treat as **deploy-dependent**; verify on staging/production before documenting customer-facing guarantees.
 
-## Canonical UI spec (internal)
+## Reference: routes and source files
 
-If your org maintains a separate UI spec file (e.g. `UI-OVERHAUL-SPEC.md`), keep it as the visual source of truth; this page tracks **routing and integration** alignment.
+Use this page for **routing and API alignment**. Visual design may live in your own design system; the paths below map product areas to `adros-app` entrypoints.
 
 Suggested product tour order for demos:
 

@@ -1,13 +1,13 @@
 ---
 title: Integration Notes
-description: Architectural blind spots, foot-guns, and hard-won lessons for anyone integrating with Adros — MCP, REST, webhooks, or dashboard.
+description: Integration patterns, auth, and common pitfalls for Adros — MCP, REST, webhooks, or dashboard.
 ---
 
 # Integration Notes
 
 > **Audience:** Engineers wiring Adros into their stack — whether via MCP, REST, webhooks, or the dashboard.
 >
-> This page documents the non-obvious stuff that will bite you if you only read the API spec.
+> This page covers behaviors and constraints that are easy to miss if you only read the OpenAPI surface.
 
 ---
 
@@ -75,7 +75,7 @@ The service layer relies on callers to enforce ownership in some paths — speci
 
 ---
 
-## 7. Contract layer foot-guns
+## 7. Contract layer — important details
 
 - `recommended_specialist` values are **runtime actor IDs** (`adros_ceo`, `adros_cmo`, `adros_cd`, `adros_deployer`) — not display names.
 - If you branch on specialist assignment, compare against these IDs, not legacy names.

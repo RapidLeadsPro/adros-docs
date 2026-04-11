@@ -1,6 +1,6 @@
 ---
 title: FAQ & Troubleshooting
-description: Common questions, setup mistakes, and the foot-guns we've seen people hit. The fastest way to unstick yourself.
+description: Common questions, setup mistakes, and fixes. The fastest way to unstick yourself.
 ---
 
 # FAQ & Troubleshooting
@@ -242,8 +242,8 @@ The `CreditGateMCPApp` middleware hard-blocks tool calls when `credits_used >= m
 ## Still stuck?
 
 - **Check [REST — Dashboard & Orchestration](/integrations/rest-dashboard)** — map of task/workspace/file/campaign routes
-- **Check the [Technical Overview](/integrations/overview)** — every known foot-gun is documented in section 11
-- **Check the [Integration Notes](/integrations/integration-notes)** — architectural blind spots for anyone wiring Adros into orchestration
+- **Check the [Technical Overview](/integrations/overview)** — common integration pitfalls are summarized in section 11
+- **Check the [Integration Notes](/integrations/integration-notes)** — deeper notes for anyone wiring Adros into an external orchestration layer
 - **Check your token works:** `curl -H "Authorization: Bearer lyr_YOUR_TOKEN" "https://api.adros.ai/api/v1/contract/specs"`
 - **Check Railway status:** if Adros itself is down (rare), every call returns 5xx — not your fault
 

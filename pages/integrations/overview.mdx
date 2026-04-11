@@ -1,19 +1,19 @@
 ---
 title: Technical Overview
-description: Architecture, data model, stack, and internals for Adros — the hybrid marketing OS.
+description: Architecture, data model, and stack for Adros — the hybrid marketing OS.
 ---
 
 # Technical Overview
 
-> **Audience:** Engineers integrating with Adros (MCP, REST, or webhooks), or anyone who needs to understand *how the system works under the hood*.
+> **Audience:** Engineers integrating with Adros (MCP, REST, or webhooks), or anyone who needs a precise picture of how components fit together.
 >
 > **Last repo verification:** 2026-04-11, reading from `c:\Cursor Projects\Adros\adros` + `adros-app`
 >
 > **Companion docs:**
 > - [REST — Dashboard & Orchestration](/integrations/rest-dashboard) — topic index of task/workspace/file/campaign REST + task WebSocket
-> - [UI Handoff (2026-04-10)](/integrations/ui-handoff-2026-04-10) — frontend build status, live dashboard/chat endpoints, and file API readiness
+> - [Dashboard & frontend integration](/integrations/ui-handoff-2026-04-10) — key routes, API expectations, and `adros-app` file map
 > - [Contract Layer](/integrations/contract-layer) — deterministic deliverable specs for lifecycle stages
-> - [Integration Notes](/integrations/integration-notes) — architectural blind spots and foot-guns
+> - [Integration Notes](/integrations/integration-notes) — integration patterns and common pitfalls
 
 ---
 
@@ -198,7 +198,7 @@ Each issue includes `recommended_specialist` (runtime actor ID) for routing into
 
 ---
 
-## 11. Known foot-guns (integration pitfalls)
+## 11. Common integration pitfalls
 
 1. **Task ownership** — always verify the caller owns the task (user_id match) before mutating; the service layer relies on callers to enforce this in some paths
 2. **Event ordering** — task events should be queried `ORDER BY created_at DESC` for "latest" feeds; confirm the endpoint you're using does this

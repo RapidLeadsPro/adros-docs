@@ -4,7 +4,7 @@
 **Author:** Adros team
 **Purpose:** Define the two onboarding journeys so an orchestration layer knows exactly who to trigger, in what order, with what handoff artifacts. Both journeys share the same backbone — only the starting phase differs.
 
-> **Pattern (external stack):** the operator may work through an **optional** orchestration layer (Paperclip/OpenClaw/custom). That layer routes; Adros is the marketing brain and execution plane. Research lanes (Perplexity, Manus, or custom) feed findings back; the task ledger (Paperclip or equivalent) tracks state when you use one.
+> **Pattern (external stack):** the operator may work through an **optional** orchestration layer (OpenClaw, a custom MCP host, or another proprietary conductor). That layer routes; Adros is the marketing brain and execution plane. Research lanes (Perplexity, Manus, or custom tools) feed findings back; the conductor’s own task tracker holds cross-tool state when you use one.
 >
 > **Pattern (native Adros):** the operator uses **Adros CEO + Command Center**; routing and tasks still land on the same backend — there is no requirement for an external orchestration layer. See [Terminology (April 2026)](#terminology-april-2026) below.
 
@@ -23,7 +23,7 @@ Older versions of this doc named the external orchestrator **Jarvis** and the de
 
 **Adros Deployer** (`adros_deployer`) is the real deploy/launch owner. There is **no** legacy **Hermes** runtime and **no** standalone **Data Analyst** agent — research/audit/analysis maps to **CMO** (and deterministic tools), creative to **CD**, go-live to **Deployer**.
 
-Below, **Conductor** means an **optional external** orchestration stack (e.g. Paperclip/OpenClaw/custom). Native Adros often replaces that with **CEO + Command Center** without a conductor.
+Below, **Conductor** means an **optional external** orchestration stack (for example OpenClaw or a custom conductor you control). Native Adros often replaces that with **CEO + Command Center** without a conductor.
 
 ---
 
@@ -58,7 +58,7 @@ Adros already has **9 workflow guides** encoding this backbone (see `adros/api/s
 ```
 Operator ──► Conductor
          │
-         │ (1) creates Paperclip issue "Onboard [client]"
+         │ (1) creates a tracked parent item "Onboard [client]"
          │     with subtasks linked to each phase
          │
          ├──► [INTAKE] Conductor itself
@@ -117,13 +117,13 @@ Operator ──► Conductor
 
 | Phase | Specialist | Tool/System | Artifact |
 |---|---|---|---|
-| Intake | Conductor (direct) | WhatsApp + Paperclip | Intake notes on issue |
+| Intake | Conductor (direct) | WhatsApp + conductor task tracker | Intake notes on issue |
 | Research | **Manus** (bridge) | Web crawl + synthesis | Research JSON + optional PDF |
 | Ingest | Adros CMO | `save_business_context`, `save_persona`, `build_brand_profile` | Populated Adros DB |
 | Keyword/Market research | Adros CMO | `research_keywords`, `competitor_gap`, etc. | `.xlsx` research file |
 | Structure | Adros (Adros Deployer) | `meta_campaign_build` / `google_campaign_build` workflow | `.xlsx` structure file |
 | Creative | Adros CD | `match_strategy` → `build_creative_prompt` → `generate_creative` | `.xlsx` copy + images |
-| Approval | Conductor | Paperclip + WhatsApp | Operator's decision |
+| Approval | Conductor | Conductor task tracker + WhatsApp | Operator's decision |
 | Launch | Adros (Adros Deployer) | MCP write tools (create_campaign, etc.) | Live campaigns |
 | Monitor | Adros cron + webhook | Daily monitor → Conductor receiver | Webhook alerts |
 
@@ -141,7 +141,7 @@ Operator ──► Conductor
 ```
 Operator ──► Conductor
          │
-         │ (1) creates Paperclip issue "Onboard + Audit [client]"
+         │ (1) creates a tracked parent item "Onboard + Audit [client]"
          │
          ├──► [INTAKE] Conductor itself
          │    Minimal: business name, ad account ID, main concern,
@@ -214,7 +214,7 @@ Operator ──► Conductor
 | Ingest | Adros CMO | Same memory tools | Populated Adros DB |
 | Reallocation | Adros (Adros Deployer) | Audit `.xlsx` Tab 5/6 | Part of audit file |
 | Creative refresh (conditional) | Adros CD | `creative_only` workflow | New copy + images |
-| Approval | Conductor | Paperclip + WhatsApp | Operator's decision |
+| Approval | Conductor | Conductor task tracker + WhatsApp | Operator's decision |
 | Execute | Adros (Adros Deployer) | MCP write tools | Updated campaigns |
 | Monitor | Adros webhook | Daily loop | Alerts |
 
@@ -222,7 +222,7 @@ Operator ──► Conductor
 
 ## 4. Shared artifact contract (how files flow between specialists)
 
-This is the part OpenClaw needs for routing: every phase produces a **named artifact** that the next phase consumes. Naming is stable, format is stable.
+This is what an external conductor needs for routing: every phase produces a **named artifact** that the next phase consumes. Naming is stable, format is stable.
 
 | Artifact | Produced by | Consumed by | Format |
 |---|---|---|---|
@@ -236,7 +236,7 @@ This is the part OpenClaw needs for routing: every phase produces a **named arti
 | Generated creatives (images) | Adros CD (via nano_banana_pro) | Adros Deployer (launch) | PNG in Adros DAM |
 | `[Client]_Monthly_Report.pptx` | **Manus** (design lane) | Conductor → Operator | PPT, templated |
 
-**Important:** all `.xlsx` templates are controlled by Adros via `get_output_template(template_type)`. OpenClaw should not hand-roll these schemas — Conductor calls Adros, Adros returns the template spec, specialists fill it.
+**Important:** all `.xlsx` templates are controlled by Adros via `get_output_template(template_type)`. The conductor should not hand-roll these schemas — it calls Adros, Adros returns the template spec, specialists fill it.
 
 ---
 
@@ -250,7 +250,7 @@ Operator: "onboard [client]"
   ├─ Conductor asks: "Do they already have an active ad account running ads?"
   │   │
   │   ├─ NO  → Journey A (fresh)
-  │   │        - Create Paperclip issue with 8 subtasks
+  │   │        - Create a parent tracker item with 8 subtasks
   │   │        - assign_and_wake → Manus bridge (research)
   │   │        - On Manus completion → assign_and_wake → Adros CMO (ingest + keyword research)
   │   │        - On completion → assign_and_wake → Adros Deployer (structure)
@@ -260,7 +260,7 @@ Operator: "onboard [client]"
   │   │        - Mark issue done, monitoring begins auto
   │   │
   │   └─ YES → Journey B (existing)
-  │            - Create Paperclip issue with 7 subtasks
+  │            - Create a parent tracker item with 7 subtasks
   │            - Wait for OAuth connect signal
   │            - assign_and_wake → Adros CMO (audit)
   │            - Branch: if audit flags creative fatigue
@@ -273,16 +273,16 @@ Operator: "onboard [client]"
 ```
 
 **Key rules:**
-1. **Every `assign_and_wake` is a Paperclip state transition** — no side channels
-2. **Every phase completion closes its subtask + creates next one** — Conductor reacts to Paperclip state events, doesn't poll
+1. **Every `assign_and_wake` should advance the conductor’s task state** — avoid side channels outside the tracker
+2. **Every phase completion closes its subtask + creates the next one** — Conductor reacts to tracker events (prefer event-driven updates over tight polling)
 3. **The operator is only pinged at APPROVAL gates** — not for intermediate phase completions
 4. **Manus is optional in Journey B** — audit data often replaces fresh research
 
 ---
 
-## 6. Manus bridge contract (what OpenClaw must build)
+## 6. Manus bridge contract (orchestration layer)
 
-Manus is third-party. For it to slot into Conductor routing, OpenClaw needs a bridge with this contract:
+Manus is third-party. For it to slot into Conductor routing, implement a small bridge with this contract:
 
 ### Input (Orchestration → Research Bridge)
 ```json
@@ -303,7 +303,7 @@ Manus is third-party. For it to slot into Conductor routing, OpenClaw needs a br
 ### Output (Bridge → Conductor)
 ```json
 {
-  "task_id": "paperclip-issue-id",
+  "task_id": "orchestration-task-id",
   "status": "complete",
   "artifacts": [
     {
@@ -325,63 +325,63 @@ Manus is third-party. For it to slot into Conductor routing, OpenClaw needs a br
 
 ### Bridge responsibilities
 1. Expose a wakeup endpoint `POST /bridge/manus/wake` so Conductor `assign_and_wake` works uniformly
-2. Translate Paperclip task → Manus API call (or browser automation if no API)
+2. Translate the conductor’s tracker row → Manus API call (or browser automation if no API)
 3. Poll Manus for completion (or receive Manus webhook if supported)
 4. Validate output against schema before marking complete
-5. Post completion back to Paperclip as a comment + attachments
+5. Post completion back to the conductor’s task tracker (comments + attachments)
 6. Call Adros ingest endpoint with structured payload
 
-**If Manus has no public API today**, the bridge uses a persistent browser session (Chrome DevTools MCP / Playwright) — ugly but works, and the contract stays the same from Conductor's view.
+**If Manus has no public API**, the bridge can use a supervised browser session (for example Playwright) so the external contract from Conductor’s perspective stays unchanged.
 
 ---
 
-## 7. Endpoints Adros needs to expose for this to work
+## 7. Optional onboarding helper endpoints
 
-These do not exist yet on the Adros side. I'm listing them so we can align before I build:
+The paths below illustrate a common pattern for **external research lanes + Adros ingest**. Availability depends on your Adros version and deployment — **always confirm in live [OpenAPI](https://api.adros.ai/docs)** before relying on them in production.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/me/onboarding/brief?url=<url>&journey=fresh\|existing` | Returns structured Manus research prompt + expected output schema |
-| POST | `/me/onboarding/ingest` | Accepts Manus research JSON, writes business_context + personas + brand assets |
-| GET | `/me/reports/monthly/{client_id}/brief` | Returns deck design brief + report data for Manus to render |
-| POST | `/me/reports/monthly/{client_id}/attach` | Accepts finished PPT URL from Manus bridge |
-| GET | `/me/clients/active` | Canonical client list for OpenClaw config externalization (see integration notes §3.1) |
+| GET | `/me/onboarding/brief?url=<url>&journey=fresh\|existing` | Returns structured research prompt + expected output schema |
+| POST | `/me/onboarding/ingest` | Accepts research JSON, writes business_context + personas + brand assets |
+| GET | `/me/reports/monthly/{client_id}/brief` | Returns deck design brief + report data for an external renderer |
+| POST | `/me/reports/monthly/{client_id}/attach` | Accepts finished deck URL from a bridge |
+| GET | `/me/clients/active` | Canonical client list for conductor configuration (see [Integration Notes](/integrations/integration-notes)) |
 
-**Open question for OpenClaw:** do you want me to build these now, or wait until the bridge is ready so we don't have orphan endpoints?
-
----
-
-## 8. What OpenClaw should NOT do
-
-- Don't hand-roll research briefs — call Adros `/me/onboarding/brief`. Adros owns the marketing cognition.
-- Don't hand-roll `.xlsx` schemas — call Adros `get_output_template`. Templates are versioned on the Adros side.
-- Don't put Manus in the critical webhook-handling path. Manus is bridge-gated, always. If the bridge is down, Journey A stalls gracefully at the research step and Conductor notifies operator — the system does not crash.
-- Don't poll for Manus completion in a tight loop. Slow janitor sweep only (event-driven is primary).
-- Don't let Conductor talk to Adros directly for Manus tasks. Route through Paperclip state transitions so the audit trail is clean.
+Coordinate rollout with your backend team so bridges and APIs ship together.
 
 ---
 
-## 9. Open questions (blocking decisions)
+## 8. What orchestration layers should avoid
 
-1. **Connect-account flow for Journey B** — does Conductor own the OAuth nudge to client, or is this a separate Admin specialist task? (Affects UX when client doesn't act immediately.)
-
-2. **Monthly report cadence** — does the orchestration layer schedule it automatically (cron) or does the operator trigger it? If automatic, this becomes a 10th Adros workflow: `monthly_report`.
-
-3. **Research lane API vs browser** — decides bridge complexity. Depends on which external research tool is being used (Perplexity, Manus, or custom) and whether it offers a programmatic API.
-
-4. **Deck template storage** — master PPT file in GDrive folder `Adros Templates/` or encoded as a structured Adros endpoint? Second option is more packageable but more work upfront.
-
-5. **Multi-client batching** — when the operator onboards 3 clients at once, does the orchestration layer fire 3 parallel flows, or serialize? (Research bridge capacity may force serialization.)
+- Avoid hand-rolling research briefs when Adros can supply them via `/me/onboarding/brief` — Adros owns the marketing cognition.
+- Avoid hand-rolling `.xlsx` schemas — call Adros `get_output_template`. Templates are versioned on the Adros side.
+- Avoid putting Manus in the critical webhook-handling path. Manus should stay bridge-gated. If the bridge is down, Journey A should stall at the research step while the operator is notified — the ads platform path should not depend on the research bridge for liveness.
+- Avoid polling for Manus completion in a tight loop; prefer webhooks or a slow janitor sweep.
+- For Manus-shaped work, route through the conductor’s task tracker so approvals and artifacts stay auditable alongside Adros task history.
 
 ---
 
-## 10. TL;DR for OpenClaw
+## 9. Design considerations (external orchestration)
 
-- **Two journeys, one backbone.** Fresh = build from scratch (Manus research → Adros structure/creative → launch). Existing = audit first (Adros audit → reallocate/fix → execute).
-- **Adros already encodes both journeys** in its workflow library. Orchestration layers don't reinvent the marketing logic — they call the right workflow and route the artifacts.
-- **Research lanes slot in via a bridge** that makes them look like any other specialist. Bridge contract is in §6.
-- **The human operator is only pinged at approval gates.** Everything else is agent-to-agent through the task ledger.
-- **5 new Adros endpoints** are needed to fully support the onboarding contract (§7).
-- **5 open questions** (§9) require product decisions before full implementation.
+1. **Connect-account flow for Journey B** — decide whether Conductor owns the OAuth nudge to the client, or a separate admin step does (affects UX when the client is slow to act).
+
+2. **Monthly report cadence** — decide whether the orchestration layer schedules reports (cron) or the operator triggers them. Automatic schedules may map to an additional workflow such as `monthly_report`.
+
+3. **Research lane: API vs browser** — bridge complexity depends on whether your research tool exposes a stable API or needs browser automation.
+
+4. **Deck template storage** — choose where master templates live (shared drive vs Adros-served spec) based on how you want to version and distribute them.
+
+5. **Multi-client batching** — decide whether parallel onboarding flows are allowed or serialized, based on bridge capacity and operator load.
+
+---
+
+## 10. TL;DR (external orchestration)
+
+- **Two journeys, one backbone.** Fresh = build from scratch (external research → Adros structure/creative → launch). Existing = audit first (Adros audit → reallocate/fix → execute).
+- **Adros encodes both journeys** in its workflow library. Conductors route work and artifacts; they should not reimplement Adros marketing logic.
+- **Research lanes slot in via a bridge** that presents them like any other specialist. Bridge contract is in §6.
+- **The human operator is only pinged at approval gates.** Other steps should flow agent-to-agent through the conductor’s tracker and Adros tasks.
+- **Optional helper endpoints** (§7) may exist depending on version — verify in OpenAPI before building automation around them.
+- **Design choices** in §9 affect how aggressively you can automate onboarding at scale.
 
 — Adros team

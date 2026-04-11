@@ -8,15 +8,27 @@ import { DocsThemeConfig, useConfig } from 'nextra-theme-docs'
  * Do not re-draw the mark in SVG here — it drifted from the official diamond + swoosh-A.
  *
  * Primary neon green (UI accents): #39ff14
+ *
+ * Navbar logo + head icons: bump `BRAND_ASSET_QS` when replacing raster assets so CDN/browsers refetch.
  */
 
+const BRAND_ASSET_QS = '?v=20260412'
+
 const AdrosLogo = () => (
-  <div style={{ display: 'flex', alignItems: 'center' }}>
+  <div style={{ display: 'flex', alignItems: 'center', minHeight: 48 }}>
     <img
-      src="/logo-horizontal.png"
+      className="adros-docs-navbar-logo"
+      src={`/logo-horizontal.png${BRAND_ASSET_QS}`}
       alt="Adros"
-      height={28}
-      style={{ height: 28, width: 'auto', maxWidth: 200, objectFit: 'contain', display: 'block' }}
+      height={44}
+      style={{
+        height: 44,
+        width: 'auto',
+        maxWidth: 320,
+        minWidth: 140,
+        objectFit: 'contain',
+        display: 'block',
+      }}
     />
   </div>
 )
@@ -47,9 +59,7 @@ const config: DocsThemeConfig = {
         <meta name="twitter:description" content={description} />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="theme-color" content="#39ff14" />
-        <link rel="icon" href="/favicon.ico" sizes="any" />
-        <link rel="icon" href="/logo-icon.png" type="image/png" />
-        <link rel="apple-touch-icon" href="/logo-icon.png" />
+        {/* Icons: primary definitions live in pages/_document.tsx (cache-busted). */}
       </>
     )
   },
