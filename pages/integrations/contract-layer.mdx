@@ -1,43 +1,51 @@
-# Adros Contract Layer
+---
+title: Contract Layer
+description: Deterministic deliverable specs for Adros lifecycle stages. What to produce, what to consume, who owns it, and where to go next.
+---
 
-**Audience:** Engineers wiring Adros into an orchestration layer
-**Author:** Adros team
-**Status:** Live on production (`api.adros.ai`). See [Quickstart](/quickstart) to connect.
-**Schema version:** v1
+# Contract Layer
 
-> **Purpose:** Wire orchestration-layer workers (Paperclip, OpenClaw, custom) to call these endpoints so every specialist becomes deterministic — no guessing what to produce, no free-text handoffs, no drift between cycles.
+The contract layer defines **exactly what each specialist must produce and consume** at every lifecycle stage. It is the bridge between Adros (marketing brain + task execution) and whatever is driving the workflow — whether that's the native CEO + Command Center or a custom conductor.
 
 ---
 
-## What's been built (Adros side)
+## How it works
 
-### 1. New table column
-`clients.lifecycle_state` (varchar 30, default `new`) + `clients.lifecycle_updated_at` (timestamptz)
+Contracts are keyed by `(stage, task_type)`. Each contract specifies:
 
-Migration file: `api/db/migrations/021_client_lifecycle_state.sql`
+| Field | Purpose |
+|-------|---------|
+| `produce` | Artifacts the specialist must deliver (e.g. `["structure_xlsx", "structure_rationale"]`) |
+| `accept` | What the specialist consumes (e.g. `["raw_research", "business_context"]`) |
+| `recommended_specialist` | Runtime actor ID: `adros_ceo` / `adros_cmo` / `adros_cd` / `adros_deployer` |
+| `review_gates` | Human checkpoints (e.g. "Operator approval") |
+| `next_stage` | Where the workflow goes after this task completes |
 
-### 2. New service module
-`api/services/contract_service.py` — the spec library. Hard-coded playbooks for every (stage, task_type) combination, returning structured deliverable specs.
+### Example
 
-### 3. New REST endpoints (all under `/api/v1`)
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/contract/spec?stage=...&task_type=...` | Get one deliverable spec |
-| GET | `/contract/specs?stage=...` | List specs (optionally by stage) |
-| POST | `/contract/writeback` | Push structured findings into memory |
-| GET | `/me/clients/{client_id}/state` | Get client lifecycle state |
-| PATCH | `/me/clients/{client_id}/state` | Set client lifecycle state |
+```python
+("creative", "generate_creatives"): {
+    "produce": ["creatives_package", "copy_variants"],
+    "accept": ["structure_xlsx", "brand_profile", "business_context"],
+    "recommended_specialist": "adros_cd",
+    "next_stage": "approved",
+    "review_gates": ["Creative Director craft review", "Operator approval"],
+}
+```
 
-### 4. New MCP tools (4 total)
-| Tool | What it wraps |
-|---|---|
-| `get_deliverable_spec(stage, task_type)` | GET `/contract/spec` |
-| `list_deliverable_specs(stage)` | GET `/contract/specs` |
-| `contract_writeback(task_type, stage, findings, client_name, ...)` | POST `/contract/writeback` |
-| `get_client_state(client_name)` | GET `/me/clients/{id}/state` |
-| `set_client_state(client_name, lifecycle_state, reason)` | PATCH `/me/clients/{id}/state` |
+**What happens:**
 
-REST is for your Python workers and automation. MCP is for LLM clients calling Adros via natural language. Routed work maps to runtime actors: `adros_ceo`, `adros_cmo`, `adros_cd`, `adros_deployer` (see [Onboarding flows — Terminology](/integrations/onboarding-flows) and your internal runtime-actor canon).
+1. Workflow engine queries `GET /contract/spec?stage=creative&task_type=generate_creatives`
+2. Returns the spec above
+3. Task is created with `assigned_agent = "adros_cd"` (from `recommended_specialist`)
+4. When complete, the specialist calls `POST /contract/writeback` with the produced artifacts
+5. State machine advances to `next_stage`
+
+---
+
+## REST vs MCP
+
+REST is for your Python workers and automation. MCP is for LLM clients calling Adros via natural language. Both use the same contract definitions.
 
 **Dashboard & orchestration REST:** The Contract endpoints above define **deliverable specs** and lifecycle **writeback**. Task inbox, event timelines, approvals, Strategy Workspace (snapshots, masters, stage review), Files, and deploy handoff use **additional** routes on the same `/api/v1` base — see [REST — Dashboard & Orchestration](/integrations/rest-dashboard).
 
@@ -45,180 +53,13 @@ REST is for your Python workers and automation. MCP is for LLM clients calling A
 
 ## Auth (same as existing Adros endpoints)
 
-**REST:** `Authorization: Bearer <mcp_token>` header. Same token you currently use for `/api/v1/me/memory/*`.
-**MCP:** `X-User-Token: <mcp_token>` header on the MCP connection (already configured in your existing setup).
-
-If you're already calling Adros memory routes, this works with zero auth changes.
-
----
-
-## Lifecycle state machine
-
 ```
-new → intake → research → creative → approved → live → optimizing
-                                                            ↓
-                                                        (steady state)
-                                                            ↓
-                                                        paused (optional pause)
-```
-
-States:
-- **new** — created, no work started
-- **intake** — gathering business context, personas, brand
-- **research** — keyword/market/competitor research
-- **creative** — generating ad creatives + copy
-- **approved** — approved by operator, ready to launch
-- **live** — campaigns running on Meta/Google
-- **optimizing** — in weekly optimization cycle (steady state)
-- **paused** — temporarily not being worked on
-
-**Existing clients are backfilled to `optimizing`** by the migration, since they're presumed live.
-
----
-
-## Example flows
-
-Two complete walkthroughs showing how an orchestration layer uses the Contract endpoints. Both use placeholder client names (`Acme Travel`, `Acme Wellness`) — substitute your own.
-
-### Flow 1 — Weekly review for an existing client
-
-Scenario: a travel client `Acme Travel` has been in `optimizing` state for months. The orchestration layer runs a weekly review every Monday.
-
-```python
-# 1. Orchestration layer checks the client's current state
-GET /api/v1/me/clients/<client-uuid>/state
-→ {"lifecycle_state": "optimizing", "suggested_next_state": "optimizing"}
-
-# 2. Fetch the deterministic spec for this task
-GET /api/v1/contract/spec?stage=optimizing&task_type=weekly_review
-→ {
-    "stage": "optimizing",
-    "task_type": "weekly_review",
-    "produce": [
-      "weekly_metrics_xlsx",
-      "creative_refresh_recommendations",
-      "search_term_negatives",
-      "budget_reallocation_plan"
-    ],
-    "data_sources": [
-      "cometly_30d", "meta_insights_30d", "meta_insights_7d",
-      "google_insights_30d", "google_search_terms_14d"
-    ],
-    "adros_tools": [
-      "list_insights",
-      "google_campaign_performance_report",
-      "google_search_terms_report",
-      "match_strategy"
-    ],
-    "output_template": "meta_ads_audit",
-    "approval_required": true,
-    "notify_sam_threshold": "any creative_fatigue OR wasted_spend > $50 OR CPA > 1.5x target",
-    "format": "xlsx + chat summary + action log",
-    "recommended_specialist": "adros_cmo",
-    "next_stage": "optimizing",
-    "review_gates": [
-      "Adros CMO optimization review",
-      "Orchestration client-context review",
-      "Operator approval"
-    ],
-    "schema_version": "v1"
-  }
-
-# 3. Orchestration layer creates a task with the spec embedded
-#    so the assigned specialist doesn't have to call Adros twice
-POST {task-ledger}/issues
-{
-  "title": "[Acme Travel] Weekly review — week of Jan 13",
-  "assignee": "adros_cmo",  # from spec.recommended_specialist (runtime actor id)
-  "metadata": {
-    "adros_spec": <full spec from step 2>,
-    "client_id": "<client-uuid>",
-    "client_name": "Acme Travel"
-  }
-}
-
-# 4. The specialist wakes up, reads the spec from issue metadata,
-#    executes each adros_tool listed, produces the artifacts,
-#    then writes findings back to Adros
-POST /api/v1/contract/writeback
-{
-  "client_id": "<client-uuid>",
-  "task_type": "weekly_review",
-  "stage": "optimizing",
-  "findings": {
-    "cpa_actual": 18.50,
-    "cpa_target": 25.00,
-    "winning_audience": "interest:hiking + age:25-44",
-    "fatigued_ads": ["ad_id_123", "ad_id_456"],
-    "wasted_spend_usd": 67,
-    "recommended_action": "scale winning audience, refresh fatigued creatives"
-  },
-  "artifact_path": "/tmp/acme-travel-weekly-2026-01-13.xlsx",
-  "metrics_after": {"cpa": 18.50, "roas": 3.2, "spend_7d": 1200}
-}
-
-→ {
-    "success": true,
-    "weekly_log_id": "<uuid>",
-    "business_context_updated": true,
-    "artifact_storage": {
-      "convention": "gdrive_per_client_per_task",
-      "key": "<user_id>/<client-uuid>/weekly_review/2026-01-13T03-00-00Z",
-      "path": "/tmp/acme-travel-weekly-2026-01-13.xlsx",
-      "ready_for_admin_upload": true
-    },
-    "schema_version": "v1"
-  }
-
-# 5. The specialist hands off the artifact path to an upload worker,
-#    which stores the file at the storage key above and posts the
-#    final location back into the task for the review gate.
-#
-# 6. After operator approval (if required), no state change is needed —
-#    optimizing is the steady state and the cycle repeats next week.
-```
-
-### Flow 2 — Onboarding a new client
-
-Scenario: the operator tells the orchestration layer to onboard a new wellness client `Acme Wellness`.
-
-```python
-# 1. Create the client record in Adros (via existing /me/clients API
-#    or the dashboard)
-
-# 2. Set the initial lifecycle state
-PATCH /api/v1/me/clients/<client-uuid>/state
-{
-  "lifecycle_state": "intake",
-  "reason": "New client signed, starting onboarding"
-}
-
-# 3. Fetch the intake spec
-GET /api/v1/contract/spec?stage=intake&task_type=gather_business_context
-→ {
-    "produce": ["business_context_record", "personas_seed"],
-    "adros_tools": ["get_intake_questions", "save_business_context", "save_persona"],
-    "approval_required": false,
-    "recommended_specialist": "adros_ceo",
-    "next_stage": "research",
-    ...
-  }
-
-# 4. The operator or Adros CEO runs the intake conversation,
-#    saves business context + personas via the listed adros_tools, then
-#    writes findings back.
-
-# 5. Advance the client to the next lifecycle stage
-PATCH /api/v1/me/clients/<client-uuid>/state
-{"lifecycle_state": "research", "reason": "Intake complete"}
-
-# 6. Repeat for research → creative → approved → live → optimizing.
-#    Each stage has its own spec and its own recommended specialist.
+Authorization: Bearer lyr_YOUR_TOKEN
 ```
 
 ---
 
-## Available specs (v1)
+## Available specs (all stages)
 
 | Stage | Task type | Owner (`recommended_specialist`) | Approval? |
 |---|---|---|---|
@@ -234,75 +75,51 @@ PATCH /api/v1/me/clients/<client-uuid>/state
 | `optimizing` | `search_term_audit` | `adros_cmo` | **Yes** |
 | `optimizing` | `budget_reallocation` | `adros_cmo` | **Yes** |
 
-Call `GET /api/v1/contract/specs` with no filter to get the full list at runtime, or filter by `?stage=<state>` to get only the specs for one lifecycle stage.
-
 ---
 
-## Integrating the Contract layer — minimal checklist
+## Endpoints
 
-To wire the Contract layer into an orchestration stack, an integrator typically needs:
-
-1. **A thin REST client.** Five functions in any language that wrap the five endpoints:
-   - `get_spec(stage, task_type) -> dict`
-   - `list_specs(stage=None) -> list[dict]`
-   - `writeback(client_id, task_type, stage, findings, **kwargs) -> dict`
-   - `get_client_state(client_id) -> dict`
-   - `set_client_state(client_id, state, reason="") -> dict`
-
-2. **Spec-driven task dispatch.** When the orchestration layer creates a new task, it should call `get_spec` first and embed the result in the task metadata. Specialists then read the spec from their task rather than re-fetching.
-
-3. **Structured writeback on completion.** When a specialist finishes, call `writeback` with the findings dict + artifact path. The response returns the canonical storage key that an upload worker should use.
-
-4. **State transitions at lifecycle boundaries.** Call `set_client_state` whenever the client advances a lifecycle stage. Call `get_client_state` whenever the orchestration layer needs to decide "what's next."
-
-5. **Schema version pinning.** All responses include `"schema_version": "v1"`. Workers should fail loud on version mismatch so you discover breaking changes early.
-
----
-
-## Behavior contract details
-
-### `writeback` storage convention
-The `artifact_storage.key` returned from writeback is the canonical path for an upload worker to use:
+### List specs
 
 ```
-gdrive://Adros/{user_id}/{client_id_or_solo}/{task_type}/{timestamp}/
+GET /contract/specs
 ```
 
-Example: `gdrive://Adros/<user-uuid>/<client-uuid>/weekly_review/2026-01-13T03-00-00Z/`
+Returns all available `(stage, task_type)` specs with their produce/accept/specialist/next_stage/review_gates.
 
-Inside that folder, the upload worker stores the actual artifact file. This means every weekly cycle for a given client has a stable, predictable folder path — easy to audit, easy to reference in future cycles.
+### Get single spec
 
-### `findings` storage in business_context
-When you call `writeback`, the findings dict gets stored in `business_context.raw_research` under TWO keys:
-
-```python
-raw_research = {
-    "weekly_review_latest": <most recent findings>,
-    "weekly_review_history": [<last 20 findings, oldest to newest>],
-    # ... other task_types similarly
-}
+```
+GET /contract/spec?stage=creative&task_type=generate_creatives
 ```
 
-This means specialists can call `get_business_context()` and immediately see "what did we find last cycle" without a separate query.
+Returns one spec. Useful when the workflow engine needs to know what's next.
 
-### Schema versioning
-Every response includes `"schema_version": "v1"`. When we change the spec structure later, we'll bump to `v2` and your workers should refuse to process v2 specs until they're updated. **Pin your worker code to v1 for now** — easy migration later.
+### Writeback (specialist delivers)
 
-### Error responses
-- **404** if no spec exists for a `(stage, task_type)` pair → don't retry, log it, escalate
-- **400** if invalid `lifecycle_state` → log it, escalate
-- **401** if auth fails → check token, escalate
+```
+POST /contract/writeback
+Body: { stage, task_type, client_id, artifacts: {...}, notes: "..." }
+```
+
+The specialist posts their produced artifacts. The contract service:
+1. Validates required artifacts from the `produce` list
+2. Stores them in task artifacts + R2
+3. Updates client lifecycle state to `next_stage`
+4. Logs the writeback as a task event
 
 ---
 
-## Known gotchas
+## Design rationale
 
-**Client resolution by name.** The `client_id` lookup in MCP tools uses an internal resolver that expects the client to already exist in Adros. If the orchestration layer creates a brand-new client and immediately tries to call `get_client_state(client_name=...)`, the resolver may return empty. Mitigation: create the client first via the dashboard or Adros API, then call Contract tools.
+**Why contracts?** Without them, each specialist has to know the state machine implicitly — and they get it wrong. Contracts make the workflow **deterministic**: given the same (stage, task_type), everyone produces and consumes the same things. This is how you get **traceability** instead of "the AI did something."
 
-**Base URL prefix.** All Contract REST endpoints live under `/api/v1/*`. Hitting `https://api.adros.ai/contract/spec` without the `/api/v1` prefix returns 404. See the [FAQ](/faq#404-on-contract-endpoints) for the most common setup mistake.
-
-**Schema version pinning.** Every response includes `"schema_version": "v1"`. When Adros bumps to v2 in the future, workers should refuse v2 specs until they're updated. Pin your parsing logic to v1 explicitly and fail loud on version mismatch.
+**Why runtime actor IDs?** Display names drift. Actor IDs (`adros_ceo`, `adros_cmo`, etc.) are stable, machine-readable, and match the actual task assignment fields in the orchestrator.
 
 ---
 
-— Adros team
+## Related docs
+
+- [REST — Dashboard & Orchestration](/integrations/rest-dashboard) — full route map
+- [Onboarding Flows](/integrations/onboarding-flows) — end-to-end flows using these contracts
+- [Technical Overview](/integrations/overview) — stack and data model

@@ -1,10 +1,13 @@
+---
+title: Integration Notes
+description: Architectural blind spots, foot-guns, and hard-won lessons for anyone integrating with Adros — MCP, REST, webhooks, or dashboard.
+---
+
 # Integration Notes
 
-**Audience:** Engineers integrating Adros with an orchestration layer (Paperclip, OpenClaw, or custom)
-**Author:** Adros team
-**Purpose:** Flag blind spots and integration gaps that every orchestration-layer builder should account for when wiring Adros into a larger agent stack.
-
-> **Note:** This document was originally written as a handoff between the Adros team and orchestration-layer engineers. Language like "your side" refers to whoever owns the orchestration layer (Paperclip, OpenClaw, or a custom runtime). If you're building such a layer, read it as advice directed at you.
+> **Audience:** Engineers wiring Adros into their stack — whether via MCP, REST, webhooks, or the dashboard.
+>
+> This page documents the non-obvious stuff that will bite you if you only read the API spec.
 
 ---
 
@@ -12,211 +15,130 @@
 
 Adros is a **hybrid marketing OS**: FastAPI on Railway, React dashboard on Vercel, Supabase Postgres, Cloudflare R2 for scoped files, plus MCP (Streamable HTTP). It holds **4,022** enriched patterns, memory, creative generation, daily autonomous monitoring (6 checks; webhook to your URL), and **first-class operator workflows** on [app.adros.ai](https://app.adros.ai): **Command Center** (tasks, event timeline, approvals, blockers, comments/follow-ups), **Strategy Workspace** (staged artifacts, masters, deploy handoff), **Files**, **Campaigns**, and **Adros CEO** (routing into tracked work). **Tasks and events are the system of record** whether work starts in the UI or via MCP.
 
-If you run **Paperclip, OpenClaw, or custom** conductors on top, they still make sense: Adros remains the **marketing capability + data plane**; your layer can own *cross-tool* sequencing, human assignment, or policies Adros does not encode. You are not required to use an external orchestrator to get coordination—native dashboards cover much of it— but many enterprise setups still want both.
+If you run a custom conductor on top, Adros remains the **marketing capability + data plane**; your layer can own *cross-tool* sequencing, human assignment, or policies Adros does not encode. You are not required to use an external orchestrator — native dashboards cover much of it.
 
 ---
 
-## 2. How Adros talks to your system today
+## 2. Auth is the same everywhere
 
-### 2.1 Outbound: Daily Monitoring Webhook (Adros → receiver)
+| Context | Header |
+|---------|--------|
+| REST | `Authorization: Bearer lyr_YOUR_TOKEN` |
+| MCP | `X-User-Token: lyr_YOUR_TOKEN` |
+| WebSocket | `?token=lyr_YOUR_TOKEN` (query param) |
+| Webhook delivery | Inbound to *your* server; you verify `X-Adros-Signature` |
 
-**Trigger:** Daily cron at 8am SGT inside Adros backend
-**Endpoint:** Configured per-user in Adros Settings (points at the orchestration layer's webhook receiver)
-**Auth:** HMAC-SHA256 signature in `X-Adros-Signature` header, secret stored in Adros `users.monitoring_webhook_secret`
-**Payload version:** v1.1
-
-**Payload shape (abbreviated):**
-```json
-{
-  "version": "1.1",
-  "source_run_id": "monitor_2026-01-15T00:00:00Z",
-  "generated_at": "2026-01-15T00:00:00Z",
-  "summary": {
-    "total_issues": 12,
-    "notify_sam_count": 3,
-    "affected_clients": ["Acme Travel", "Acme Wellness"],
-    "alert_types": {"creative_fatigue": 4, "search_term_waste": 6, "rsa_health": 2}
-  },
-  "issues": [
-    {
-      "dedupe_key": "a3f1b2c4d5e6f789",
-      "alert_type": "creative_fatigue",
-      "severity": "high",
-      "headline": "...",
-      "summary": "...",
-      "client_name": "Acme Travel",
-      "client_id": "<client-uuid>",
-      "recommended_specialist": "creative_director",
-      "notify_sam": true,
-      "metrics": {...},
-      "timestamp": "2026-01-15T00:00:00Z"
-    }
-  ]
-}
-```
-
-**Dedupe:** `dedupe_key = sha256(alert_type + client_id + affected_entity)[:16]` — stable across runs, use this to suppress repeats.
-
-### 2.2 Inbound: Adros MCP (Specialists → Adros)
-
-MCP clients connect to Adros over Streamable HTTP as the signed-in user and call tools (`build_creative_prompt`, `generate_creative`, `match_strategy`, `list_insights`, `google_campaign_performance_report`, etc.). **Native** routed work uses runtime actor IDs (`adros_cmo`, `adros_cd`, `adros_deployer`, `adros_ceo`) — legacy names like **Hermes** or a standalone **Data Analyst** agent are obsolete.
-
-**This path does NOT go through your webhook.** It's pull-based: the specialist decides when to call Adros.
+**One token, one user, one permission model.** MCP tools can do everything the REST API can do (and vice versa), scoped to the same user.
 
 ---
 
-## 3. Blind spots in your P0 plan — things to fix or account for
+## 3. MCP connection: the #1 support issue
 
-These map onto `docs/implementation-priority-list.md` items.
+**Symptom:** "I added the MCP config but Claude doesn't see Adros tools."
 
-### 3.1 BLIND SPOT: Adros doesn't know your `ALLOWED_CLIENT_NAMES`
+**Checklist:**
 
-**Your P0 #1 (Externalize client config) and P0 #2 (Unknown-client suppression) are correct — but they currently only defend *downstream*. Adros is upstream and has no idea which clients are live in your system.**
-
-Concrete consequence:
-- Adros runs daily monitoring across **every client in its DB**, including dropped ones — any ad account whose token is still valid will produce alerts, even if the orchestration layer no longer considers that client active.
-- Adros sends webhook alerts for those clients.
-- The receiver then has to suppress them downstream, but Adros has already burned LLM tokens generating the alert text.
-
-**What I need from you:**
-- Decide whether Adros should **pull** your canonical client list (e.g., `GET /openclaw/active-clients` on your side) on each monitor run, OR
-- Whether you want Adros to **expose** `GET /me/clients/active` for you to sync from (Adros-side config externalization).
-
-Related: Adros currently has **no `is_active` flag** on the `clients` table. I can add one, but I need to know if OpenClaw is the source of truth or Adros is. **Pick one.** Don't let it drift.
-
-### 3.2 BLIND SPOT: Monitoring webhook is per-*user*, orchestration is per-*client*
-
-Adros' `users.monitoring_webhook_url` is scoped to one Adros user account. If multiple Adros users (agency setup) all point at the same OpenClaw webhook, your receiver will get overlapping alert streams with no clean tenant separation.
-
-**What I need from you:**
-- Confirm whether you want one canonical "ops account" on Adros that all monitoring flows through, or
-- Whether Adros should add a `webhook_tenant_id` field to payloads so you can route by tenant on your side.
-
-### 3.3 BLIND SPOT: Adros doesn't enforce your wakeup rule
-
-Your `docs/paperclip-wakeup-system.md` is clear: **assignment alone doesn't start specialists — wakeup is mandatory.** Adros' side doesn't know this. When a specialist calls `schedule_optimization_review` in Adros, Adros creates a pending experiment in its own DB but does **not** create a Paperclip issue or trigger wakeup.
-
-Consequence: experiments can sit pending in Adros forever if Paperclip isn't independently scheduling a review task.
-
-**What I need from you:**
-- Decide the contract: does Adros push a "review due" webhook when the scheduled date hits, or does Paperclip poll Adros `/me/optimization/due`?
-- Either way, whichever side creates the Paperclip issue **must also call wakeup**. Document this in your `assign_and_wake()` primitive (your P0 #4).
-
-### 3.4 BLIND SPOT: `schedule_optimization_review` has no Paperclip reminder loop
-
-Currently in Adros:
-1. Specialist calls `schedule_optimization_review(client_id, review_date)`
-2. Row created in `auto_optimize_experiments` with `status=pending`, `scheduled_for=<date>`
-3. Daily monitor's `session_start_check` will surface it **only if** it's already overdue
-
-Gap: between "created" and "overdue" there is no nudge. If you want proactive scheduling, either:
-- Adros emits a "review_due_soon" webhook 24h before scheduled_for, OR
-- Paperclip creates an issue at schedule time with a due date and handles its own reminders
-
-**Recommend option B** — keeps scheduling logic on your side where the humans operate.
-
-### 3.5 BLIND SPOT: Your hardcoded agent IDs vs Adros' user_token model
-
-Your `SETTINGS-AND-FILES-MAP.md` shows agent IDs hardcoded in `webhook.py` and `orchestrator.py`. That's fine for Paperclip. But when those agents call Adros MCP, **Adros authenticates by user_token, not by agent ID**. The mapping "this Paperclip agent = this Adros user" currently lives nowhere explicit.
-
-**What I need from you:**
-- Add a mapping table in your config externalization work (P0 #1):
-  ```yaml
-  agents:
-    adros_deployer:
-      paperclip_id: 6711eb63-...
-      adros_user_token: <stored securely as ADROS_TOKEN_DEPLOYER>
-    adros_cd:
-      paperclip_id: dbced9b6-...
-      adros_user_token: <ADROS_TOKEN_CD>
-  ```
-- Without this, rotating an Adros user or onboarding a new specialist silently breaks MCP auth.
-
-### 3.6 BLIND SPOT: Dedupe lives in two places, uncoordinated
-
-Adros sends `dedupe_key` per issue. Your `adros-monitoring-state.json` also dedupes. If both sides dedupe with different keys/windows, you can end up with:
-- Adros thinks it's a new alert (different day, new dedupe)
-- OpenClaw thinks it's a duplicate (same content hash)
-- Or vice versa
-
-**What I need from you:**
-- Confirm you'll use Adros' `dedupe_key` as the authoritative dedupe identifier, AND
-- Tell me your dedupe window (24h? 7d?) so Adros can match it.
-
-### 3.7 BLIND SPOT: No health/heartbeat from Adros to your ops channel
-
-Your P1 #9 (internal ops alert channel) should include Adros liveness. Today, if Adros' daily cron dies silently, you won't know for 24h+. Options:
-- Adros sends a nightly "monitor_run_complete" heartbeat webhook even when zero issues
-- Your side alerts if no Adros heartbeat in 25h
-
-**I recommend the heartbeat approach.** Cheap to add on my side if you confirm you want it.
+1. Token is `lyr_...` (not a Supabase anon key or other string)
+2. `X-User-Token` header, not `Authorization: Bearer`
+3. URL is `https://api.adros.ai/mcp` (not `/api/v1/mcp` or `/mcp/sse`)
+4. Transport is **Streamable HTTP** (not SSE or stdio)
+5. Restart the MCP client fully after config change
 
 ---
 
-## 4. What's already solid (don't touch)
+## 4. Memory is append-only (mostly)
 
-- **HMAC signing:** Adros signs every webhook with HMAC-SHA256. Your receiver should verify. Secret rotation: regenerable from Adros Settings.
-- **Payload v1.1 schema:** stable, versioned. If I change it I'll bump to v1.2 and keep v1.1 live for a deprecation window.
-- **Idempotency:** Adros MCP has a 60s idempotency cache + 20/hr rate limit on `generate_creative` to stop retry storms. You shouldn't see duplicate image generations even if your client retries aggressively.
-- **AutoOptimize backend cleanup:** orphan experiments (client_id=NULL) are fixed. `_client_filter` now strictly scopes. `POST /optimization/cleanup` exists for bulk ops with `dry_run=true` default.
-
----
-
-## 5. Things I will NOT do from the Adros side without your sign-off
-
-So we don't collide:
-1. Add `is_active` to `clients` table (need to know if Adros or OpenClaw owns truth)
-2. Add `/me/clients/active` endpoint (need to know if you want pull vs push)
-3. Emit per-overdue-experiment webhook (you may prefer Paperclip-side scheduling)
-4. Add heartbeat webhook (need your confirmation you want it)
-5. Add tenant_id to payload (need to know your multi-tenant plan)
+- `business_context` and `personas` can be overwritten
+- `weekly_logs` should be **appended**, not replaced — they're the audit trail
+- Memory is scoped by `(user_id, client_id)` — `client_id = NULL` for solo mode
+- If you're building a "reset client" flow, you must explicitly clear each memory type
 
 ---
 
-## 6. Things I recommend you do on your side (mapped to your priority list)
+## 5. Multi-tenant scoping
 
-| Your priority item | Adros-aware addition |
-|---|---|
-| **P0 #1** Externalize client config | Include `adros_client_id` + `adros_user_token` per client/agent in the YAML |
-| **P0 #2** Unknown-client suppression | Use Adros `dedupe_key` as primary key; cross-check `client_id` against canonical config |
-| **P0 #3** Structured logging with trace_id | Propagate Adros `source_run_id` as your `trace_id` when an alert comes in — single ID across both systems |
-| **P0 #4** `assign_and_wake()` primitive | When the issue source is an Adros webhook, include `adros_issue_dedupe_key` in Paperclip issue metadata so the specialist can call back into Adros with context |
-| **P1 #6** Client resolver | Resolver should accept Adros `client_id` (UUID) as an input form, not just names/aliases |
-| **P1 #8** Normalize approval objects | Include `adros_source_run_id` + `adros_dedupe_key` in approval metadata for audit trail |
+**Every** data access should be scoped to `user_id`. Where client context matters, also scope by `client_id`.
+
+The service layer relies on callers to enforce ownership in some paths — specifically:
+- **Approve/reject** — verify the caller owns the task before mutating
+- **File access** — R2 prefixes include user/client scope; the REST layer enforces this
+- **Campaign data** — depends on which Google/Meta accounts the user has connected and selected
 
 ---
 
-## 7. Quick reference — Adros endpoints you'll likely hit
+## 6. Webhook delivery is fire-and-forget
 
-| Purpose | Method | Path |
-|---|---|---|
-| Configure webhook | PATCH | `/me/monitoring/webhook` |
-| Test webhook delivery | POST | `/me/monitoring/webhook/test` |
-| List clients | GET | `/me/clients` |
-| Campaign reporting | GET | `/me/campaigns?account_id=...&date_range=...` |
-| Optimization cleanup | POST | `/optimization/cleanup` (dry_run defaults true) |
-| MCP base | — | Streamable HTTP, auth via user_token |
-
-Base URL: `https://api.adros.ai`
+- **No retries.** If your server returns non-200, the payload is lost.
+- **Signature:** HMAC-SHA256 of `sort_keys=True` JSON using your webhook secret.
+- **Deduping:** use `dedupe_key` from the payload — same alert type + client + headline = same key.
+- Design your receiver to be idempotent.
 
 ---
 
-## 8. Open questions for you to answer
+## 7. Contract layer foot-guns
 
-These are the five decisions I need back before I touch the Adros integration surface:
-
-1. **Source of truth for client list** — Adros or OpenClaw? (affects 3.1, 3.5)
-2. **Monitoring webhook tenancy** — single ops user or multi-tenant with routing ID? (affects 3.2)
-3. **Overdue experiment flow** — Adros pushes reminder webhook, or Paperclip owns scheduling? (affects 3.3, 3.4)
-4. **Dedupe window** — how long does OpenClaw treat an Adros `dedupe_key` as a duplicate? (affects 3.6)
-5. **Heartbeat webhook** — do you want Adros to send nightly "all clear" pings? (affects 3.7)
-
-Answer these and I can implement the Adros side in one pass instead of piecemeal.
+- `recommended_specialist` values are **runtime actor IDs** (`adros_ceo`, `adros_cmo`, `adros_cd`, `adros_deployer`) — not display names.
+- If you branch on specialist assignment, compare against these IDs, not legacy names.
+- `next_stage` in the spec is advisory — the actual state machine lives in the orchestrator service.
 
 ---
 
-## 9. One blunt observation
+## 8. Creative generation guardrails
 
-The biggest risk in any Adros ↔ orchestration-layer integration is **implicit contracts between Adros and the orchestration layer that neither side has documented**. This file captures the ones visible from the Adros side. The orchestration layer likely has a similar list from its side. Reconcile them before shipping config externalization — because that's the moment those implicit contracts become explicit, and if both sides do it separately, they'll drift immediately.
+- Always `mode='bold'` + `nano_banana_pro` generator
+- 60-second idempotency window — duplicate requests within the window return the cached result
+- 20 requests/hour rate limit per user
+- Pattern blueprints anchor the generation — you select or auto-select a pattern first
 
-— Adros team
+---
+
+## 9. File upload flow
+
+1. Client calls `POST /files/upload` with multipart form data
+2. Backend validates scope (user_id + client_id)
+3. Object written to R2 under scoped prefix
+4. Metadata stored in task artifacts
+5. Browse/download/delete via corresponding endpoints
+
+**Requires R2 env configuration on the server.** If missing, uploads fail with a configuration error, not a 404.
+
+---
+
+## 10. Task event timeline
+
+- Events are append-only — never mutated after creation
+- For "latest activity" feeds, query `ORDER BY created_at DESC`
+- WebSocket at `/ws/events/{task_id}?token=lyr_...` streams new events in real-time
+- Event types include: tool calls, model steps, guardrails, approvals, blocker creation/resolution, comments
+
+---
+
+## 11. Campaign scope and fallback
+
+- Google/Meta campaign data depends on **which accounts the user has connected and selected**
+- If the selected account is unavailable, the system may fall back to another accessible account
+- **Fallback behavior is surfaced in the UI** — the user sees which account data came from
+- When building integrations, always check the scope metadata in campaign responses
+
+---
+
+## 12. Quality track prerequisites
+
+Before quality track features (scorecards, guardrails, audit artifact persistence) work:
+
+1. Migration `025_audit_quality_track` applied to the database
+2. Env var `AUDIT_QUALITY_TRACK_ENABLED` set (or defaulting to enabled)
+3. The task is an audit-type task that completed the quality path
+
+If any of these are missing, scorecard endpoints return empty — not errors.
+
+---
+
+## 13. What NOT to do
+
+- **Don't** treat Adros as a thin proxy to Google/Meta APIs — it wraps them with marketing intelligence and scope enforcement
+- **Don't** hardcode specialist display names — use runtime actor IDs
+- **Don't** assume all tasks are the same type — audit tasks, creative tasks, and deploy tasks have different lifecycles
+- **Don't** skip ownership checks when building custom orchestration on top
+- **Don't** replace weekly logs — append to them
+- **Don't** expect webhook retries — build idempotent receivers

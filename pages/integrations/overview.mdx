@@ -1,630 +1,256 @@
-# Adros Technical Overview
+---
+title: Technical Overview
+description: Architecture, data model, stack, and internals for Adros — the hybrid marketing OS.
+---
 
-**Audience:** Engineers and AI agent builders integrating with Adros
-**Author:** Adros team
-**Adros version:** 0.3.0
+# Technical Overview
 
-> **Rule of reading:** every fact in this doc maps to the live production system. If anything here drifts from what Adros actually does, this doc is wrong and should be updated.
+> **Audience:** Engineers integrating with Adros (MCP, REST, or webhooks), or anyone who needs to understand *how the system works under the hood*.
+>
+> **Last repo verification:** 2026-04-11, reading from `c:\Cursor Projects\Adros\adros` + `adros-app`
 >
 > **Companion docs:**
-> - [Integration Notes](/integrations/integration-notes) — integration blind spots + open decisions for orchestration-layer builders
-> - [Onboarding Flows](/integrations/onboarding-flows) — Journey A (fresh client) vs Journey B (existing ad account), research-lane bridge contract
 > - [REST — Dashboard & Orchestration](/integrations/rest-dashboard) — topic index of task/workspace/file/campaign REST + task WebSocket
 > - [UI Handoff (2026-04-10)](/integrations/ui-handoff-2026-04-10) — frontend build status, live dashboard/chat endpoints, and file API readiness
+> - [Contract Layer](/integrations/contract-layer) — deterministic deliverable specs for lifecycle stages
+> - [Integration Notes](/integrations/integration-notes) — architectural blind spots and foot-guns
 
 ---
 
 ## 1. What Adros is
 
-**Adros is a hybrid marketing OS:** the same FastAPI + Postgres + MCP stack powers **operator-grade dashboard workflows** and **external AI agents**.
+**Adros is a hybrid marketing OS:** the same FastAPI + Postgres + MCP backend powers **operator-grade dashboard workflows** and **AI agent integration**.
 
-- **Marketing brain:** 4,022-pattern database, memory layer, creative pipeline, daily autonomous monitor. Specialists and MCP clients call Adros to "think like marketers" and act on Meta/Google through wrapped tools (not thin generic proxies).
-- **Orchestration surfaces:** `app.adros.ai` includes **Command Center** (client-scoped task inbox, live event timeline, approvals), **Strategy Workspace** (staged strategy/creative artifacts and masters), **Files** (R2-backed, scoped storage), **Campaigns** (live metrics when accounts are connected), **Adros CEO** (coordination/routing), plus chat where wired. Tasks and events are the **system of record** for automation runs — whether the trigger came from the UI or MCP.
-- **External orchestration:** Many customers still pair Adros with Paperclip, OpenClaw, or custom conductors. That is fine: Adros remains the **marketing capability + data plane**; the conductor owns cross-tool sequencing if you want it outside Adros.
+- **Marketing brain:** 4,022-pattern database, memory layer, creative pipeline, daily autonomous monitor. Managed Agents and MCP clients call Adros to "think like marketers" and act on Meta/Google through wrapped tools.
+- **Orchestration surfaces:** [app.adros.ai](https://app.adros.ai) includes **Command Center** (client-scoped task inbox, live event timeline, approvals, blockers, comments → follow-up tasks), **Strategy Workspace** (staged strategy/creative artifacts, canonical masters, deploy request), **Files** (R2-backed, scoped storage), **Campaigns** (live metrics when accounts connected), **Adros CEO** (coordination → routed work).
+- **Tasks and events are the system of record** — whether the trigger came from the UI, CEO chat, or MCP.
 
-**Mental model in one sentence:** *Adros = marketing intelligence + execution hands + **traceable tasks/events/files** on one backend. External orchestrators = optional conductors around that plane.*
+**Runtime actors (April 2026):**
+
+| Actor | ID | Role |
+|-------|-----|------|
+| **Adros CEO** | `adros_ceo` | Conversational coordinator; intake; routes work into tracked tasks |
+| **Adros CMO** | `adros_cmo` | Managed Agent — audits, research synthesis, structure/strategy, optimization analysis |
+| **Adros CD** | `adros_cd` | Copy + creative direction (target: full Managed Agent) |
+| **Adros Deployer** | `adros_deployer` | Launch and account change execution |
 
 ---
 
-## 2. Stack (verified)
+## 2. Stack
 
 | Layer | Tech |
-|---|---|
-| Backend | FastAPI (Python 3.11) — `api/main.py` |
-| Hosting | Railway — `api.adros.ai` |
-| Database | Supabase Postgres (project `liormytahhpjjbnubgwo`) |
-| ORM | SQLAlchemy async |
-| Frontend | React 19 + Vite + TailwindCSS on Vercel — `app.adros.ai` |
-| MCP | Streamable HTTP, spec `2025-03-26`, `mcp==1.26.0`, endpoint `/mcp` |
-| LLMs | Anthropic Claude (Haiku 4.5 / Sonnet 4.6 / Opus 4.6) |
-| Image gen | Google Gemini Nano Banana Pro (default) / Nano Banana 2 |
-| Email | Resend |
-| Auth | Supabase Auth JWT + per-feature `user_token`/`mcp_token` |
-| File storage | **Cloudflare R2** (S3-compatible; client-scoped keys) — primary object store for dashboard Files + audit artifacts; Postgres remains on Supabase |
-
-### Background loops started in `main.py` lifespan
-1. `token_refresh_loop` — refreshes expiring Meta tokens daily
-2. `winback_email_loop` — hourly, runs cancellation recovery sequence
-3. `reengagement_email_loop` — hourly, credit re-engagement
-4. `autonomous_monitor_loop` — **this is the one that sends webhooks to OpenClaw**. Daily at 00:00 UTC (8am SGT), min 20h between runs
-
-### MCP middleware chain (left to right on a request)
-```
-MCPAuthContextApp → CreditGateMCPApp → AutoLogMCPApp → StreamableHTTPASGIApp
-```
-- `MCPAuthContextApp` — resolves `X-User-Token` header into a user context
-- `CreditGateMCPApp` — **hard-blocks** tool calls when user's credits ≤ 0
-- `AutoLogMCPApp` — logs every tool call for usage + billing
-- `StreamableHTTPASGIApp` — the MCP SDK's session manager
-
-**Implication for OpenClaw:** if a specialist's Adros call suddenly fails with a credit-exhausted error, it's this gate. Don't retry forever — escalate.
+|-------|------|
+| **Backend** | FastAPI 0.3.0 on Railway (`api.adros.ai`) |
+| **Database** | Postgres via Supabase (migrations numbered `001`–`025+`) |
+| **File storage** | **Cloudflare R2** (S3-compatible; client-scoped keys) — primary object store for dashboard Files + audit artifacts |
+| **Frontend** | React + Vite on Vercel (`app.adros.ai`) |
+| **MCP server** | Streamable HTTP at `/mcp`, spec `2025-03-26` |
+| **Auth** | JWT (`lyr_...` tokens); same token for MCP and REST |
+| **Vector search** | Qdrant (pattern similarity, memory recall) |
+| **Creative generation** | External image generators (Gemini path etc.) proxied through Adros |
+| **Notifications** | Resend (email), WhatsApp (BYOK demo path) |
 
 ---
 
-## 3. Data model (verified)
+## 3. Data model (key entities)
 
-All tables in Supabase Postgres. Source: `api/models/`.
+### Users & multi-tenancy
 
-### `users` — `api/models/user.py`
-Key fields for OpenClaw:
-- `id` (UUID), `email`, `plan_tier` (`free|pro|pro_annual|trial`), `is_active` (bool)
-- `mcp_token` — the personal MCP URL token
-- `facebook_access_token`, `facebook_ad_account_ids[]`, `facebook_selected_account_ids[]`
-- `google_ads_refresh_token`, `google_ads_customer_ids[]`, `google_ads_account_hierarchy` (MCC tree)
-- `monthly_credits` / `credits_used`
-- **`monitoring_emails_enabled`** (bool, default true)
-- **`monitoring_webhook_url`** (text)
-- **`monitoring_webhook_secret`** (string 64) — HMAC-SHA256 secret
+- `users` — Supabase `auth.users` + Adros `public.users` profile
+- `clients` — each user can have multiple clients; solo mode uses `client_id = NULL`
+- **All data scoped** by `(user_id, client_id)` where applicable
+- `client_lifecycle_state` — tracks where each client is in their journey (intake → research → creative → approved → live → optimizing)
+- `client_integrations` — BYOK secrets (Cometly, WhatsApp, etc.) encrypted at rest via Fernet
 
-### `clients` — `api/models/client.py`
-- `id`, `user_id`, `client_name`, `client_slug`, `website_url`, `notes`
-- Unique index on `(user_id, client_slug)`
-- **No `is_active` flag** — OpenClaw's "which clients are live" question has no answer from this table. See integration notes §3.1.
+### Tasks & orchestration
 
-### `business_context` — `api/models/memory.py`
-One row per (user_id, client_id). `client_id=NULL` = solo mode. Fields:
-- `business_name`, `website_url`, `product_description`, `ideal_customer`
-- `competitors[]`, `positioning`, `unique_value_prop`
-- `can_say[]`, `cannot_say[]` — brand voice constraints
-- `goals[]`, `monthly_budget`, `customer_journey`
-- `raw_research` (JSONB) — Manus or research-lane findings land here
-- **Compliance gate fields:** `landing_page_url`, `landing_page_type` (`url|lead_form|none`), `conversion_source` (`platform|cometly|both`), `brand_colors`, `tone_of_voice`, `industry`, `ad_language` (`en|zh|ms|en,zh`)
+- `tasks` — the unit of work; has status, specialist/agent, cost, project
+- `task_events` — append-only timeline: tool calls, model steps, guardrails, approvals, blockers
+- `task_comments` — discussion; can optionally spawn a linked follow-up task
+- `task_blockers` — structured human-required items (billing, permissions, policy)
+- `projects` — grouping; each client typically has one active project
+- **WebSocket** at `/ws/events/{task_id}?token=lyr_...` for real-time event streaming
 
-### `personas` — `api/models/memory.py`
-Per (user, client). Fields: `name`, `age_range`, `pain_points[]`, `desires[]`, `objections[]`, `language[]`, `platforms[]`, `persona_type` (`primary|secondary|aspirational`), `budget_weight` (% allocation).
+### Strategy & artifacts
 
-### `benchmarks` — `api/models/memory.py`
-Competitor benchmark data. `competitor_name`, `competitor_url`, `ad_angles[]`, `hooks[]`, `offers[]`, `weaknesses[]`. This is where Manus competitor-teardown output should land.
+- Workspace stages: research → economics → structure → copy/creative → audit → deploy
+- **Masters:** each stage can have a canonical "master" artifact (the current operating spec)
+- **Snapshots:** workspace state serialized to R2 for audit trail
+- **Deploy request:** creates an `adros_deployer` task with manifest context
 
-### `weekly_logs` — `api/models/memory.py` (the action stream)
-Append-only. Every specialist action writes here:
-- `action_type`, `action_description`, `reason`, `result`
-- `pattern_id`, `pattern_name` — if the action used a pattern
-- `metrics_before`, `metrics_after` (JSONB)
-- **Creative history fields (Meta only):** `hook_type` (7 values: `question|bold_claim|negative|curiosity|social_proof|before_after|statistic`), `visual_style` (7 values: `ugc|lifestyle|product_only|text_overlay|testimonial|animation|carousel`), `hook_text`, `cta_text`, `ad_format` (`feed|story|reel|carousel`), `creative_result` (`winner|loser|inconclusive|pending`), `creative_notes`
+### Patterns & memory
 
-**Why this matters:** this is the "what has this specialist done for this client recently" memory. Any specialist waking up on a task should call `recall_weekly_log(weeks_back=4)` before acting.
+- `patterns` — 4,022 enriched ad patterns with `enrichment_metadata` + `image_generation_prompt`
+- `memory_store` — business_context, personas, weekly_logs scoped by `(user_id, client_id)`
+- Vector search via Qdrant for pattern similarity and memory recall
 
-### `patterns` — `api/models/pattern.py` (the moat)
-**~4,022 rows.** Fields:
-- **Identity:** `name`, `slug`, `description`, `source_url`, `source_platform`, `source_brand`
-- **Taxonomy:** `creative_style` (one of **17** styles), `copy_framework` (one of **45** frameworks), `awareness_stage` (`non_problem|problem|solution|product|purchase_ready`), `alignment_category` (`trust_builder|problem_solver|desire_activator|action_driver`)
-- **Psychology:** `psychology_primary`, `psychology_secondary`, `emotional_trigger`
-- **Visual specs:** `visual_layout`, `color_strategy`, `text_hierarchy`, `hook_type`
-- **Format:** `format` (`static|carousel|video`), `aspect_ratio`, `platform` (`meta|google|tiktok|linkedin`)
-- **Blueprint:** `blueprint_json` (full generation instructions)
-- **Enrichment (Opus pass, API-visible but UI-hidden):** `image_generation_prompt`, `enrichment_metadata` (JSON), `enriched_at`
-- **Scores:** `quality_score` (0-1), `performance_score` (0-1), `times_deployed`, `avg_ctr`, `avg_cpa`, `avg_roas`
+### Monitoring
 
-### `pattern_elements` — granular text/visual elements per pattern
-`element_type` (`headline|subheadline|body|cta|image_prompt|logo`), `position`, `content_template`, `font_size_tier`, `color_role`, `max_words`.
-
-### `industries` + `tags` + `pattern_tags`
-Reference data for classification. 17 creative styles, 45 copy frameworks, taxonomy accessible via `get_taxonomy()` MCP tool.
-
-### Other important tables
-- `auto_optimize_experiments`, `auto_optimize_programs`, `learnings` — optimization engine (`api/models/optimization.py`)
-- `brand_assets`, `creatives` — DAM layer (`api/models/brand_asset.py`, `api/models/creative.py`)
-- `campaigns` — user campaign tracking (`api/models/user.py`)
-- `deployments` — pattern deployment log (`api/models/deployment.py`)
-- `video_blueprints` — video ad scaffolding (`api/models/video_blueprint.py`)
-- `billing` — usage events (`api/models/billing.py`)
+- `monitoring_configs` — per-user webhook URL for daily monitor output
+- Daily run at 8am SGT: 6 checks, HMAC-signed POST to webhook
+- Monitor issues include `recommended_specialist` (runtime actor ID) for routing
 
 ---
 
-## 4. MCP server — **74 tools** (verified count from `main.py`)
+## 4. MCP server
 
-Endpoint: `https://api.adros.ai/mcp`
-Transport: Streamable HTTP
-Auth: `X-User-Token` header OR `user_token` parameter in tool call
-
-### Tool categories (exactly as declared in `main.py` root endpoint)
-
-**Pattern tools (6)** — `api/mcp_server.py`
-```
-search_patterns, get_blueprint, match_strategy,
-list_industries, get_taxonomy, log_deployment
-```
-
-**Memory tools (7)** — `api/mcp_server.py`
-```
-save_business_context, get_business_context,
-save_persona, get_personas,
-log_weekly_action, recall_weekly_log, update_log_result
-```
-Additional: `list_clients`, `recall_creative_history`, `build_brand_profile`, `autooptimize_session_check`, `schedule_optimization_review`.
-
-**Workflow / intake tools (3)**
-```
-get_workflow_guide, get_output_template, get_intake_questions
-```
-
-**Creative tools (3 core + support)**
-```
-generate_creative, edit_creative, build_creative_prompt
-```
-Plus: `ideate_creative_concepts`, `validate_creative`, `verify_visual_reference`, `analyze_creative_style`, `save_external_creative`, `upload_brand_asset`, `audit_landing_page`.
-
-**Meta Ads read (21)** — `api/mcp/meta_ads/read_tools.py`
-```
-list_ad_accounts, read_ad_account,
-list_campaigns, read_campaign,
-list_ad_sets, read_ad_set,
-list_ads, read_ad,
-list_ad_creatives, read_ad_creative,
-list_ad_previews, list_insights,
-search_interests, suggest_interests, estimate_audience_size,
-search_behaviors, search_demographics, search_geo_locations,
-search_ads_archive, search_pages, list_account_pages
-```
-
-**Meta Ads write (14)** — `api/mcp/meta_ads/write_tools.py`
-```
-create_campaign, update_campaign,
-create_ad_set, update_ad_set,
-create_ad_creative, create_ad, update_ad,
-upload_ad_image,
-clone_campaign, clone_ad_set, clone_ad,
-create_custom_audience, create_lookalike_audience,
-create_report
-```
-Plus: `create_multi_variant_creative` (asset_feed_spec: up to 5 headlines, 5 primary texts, 5 descriptions, 10 images/videos).
-
-**Keyword research (5)** — `api/mcp/keyword_research_tools.py` (DataForSEO-backed)
-```
-research_keywords, get_keyword_metrics, get_keywords_for_site,
-find_serp_competitors, find_negative_keyword_candidates
-```
-Plus: `competitor_gap`.
-
-**Google Ads (27)** — `api/mcp/google_ads_tools.py`
-```
-list_google_customers, get_google_customer_info,
-list_google_campaigns, get_google_campaign,
-list_google_keywords, list_google_negative_keywords,
-list_google_ads, list_google_assets,
-list_google_bidding_strategies,
-google_campaign_performance_report, google_keyword_performance_report,
-google_search_terms_report, google_quality_score_report,
-google_auction_insights_report,
-create_google_campaign, set_google_campaign_status,
-add_google_keywords, update_google_keyword, add_google_negative_keywords,
-create_google_responsive_search_ad,
-create_google_sitelinks, create_google_callouts, create_google_structured_snippet,
-create_google_image_asset, create_google_video_asset,
-link_google_asset_to_campaign,
-set_google_campaign_bidding_strategy
-```
-
-**Total declared in `main.py`: 74** (some tools exist in code but aren't advertised in the root endpoint — the 74 is the "public catalog").
-
-### Idempotency + rate limiting (on MCP)
-- `generate_creative` has a **60-second idempotency cache** (hash of `prompt[:200] + user_id + aspect_ratio`) — prevents retry-storm duplicates
-- `generate_creative` is **rate-limited at 20/hour/user**
-- Specialists hitting this limit get a clear error — the orchestration layer should surface to the operator, not retry
+- **74 tools** exposed at `https://api.adros.ai/mcp`
+- **Transport:** Streamable HTTP (spec `2025-03-26`)
+- **Auth:** `X-User-Token: lyr_...` header
+- Tool categories: pattern search, creative generation, campaign actions, memory, monitoring, contract specs, workspace, files, orchestrator tasks
+- All tools use the same auth + scoping as REST — no separate permission model
 
 ---
 
-## 5. REST API surface (verified — all under `/api/v1/*`)
+## 5. REST API
 
-Important correction: **every REST router is mounted at `/api/v1`** (source: `main.py` lines 111-125). Full paths below include the prefix.
-
-### Patterns (legacy MCP-over-REST) — `routes/patterns.py`
-```
-POST /api/v1/tools/search_patterns
-GET  /api/v1/tools/get_blueprint/{pattern_id}
-GET  /api/v1/tools/get_blueprint/slug/{slug}
-POST /api/v1/tools/match_strategy
-POST /api/v1/tools/auto_select
-POST /api/v1/tools/log_deployment
-POST /api/v1/tools/log_performance
-GET  /api/v1/industries
-GET  /api/v1/taxonomy
-```
-
-### Memory — `routes/memory_routes.py`
-```
-GET    /api/v1/memory?client_id=...
-POST   /api/v1/memory
-GET    /api/v1/memory/business-context?client_id=...
-PUT    /api/v1/memory/business-context
-GET    /api/v1/memory/completeness?client_id=...
-GET    /api/v1/memory/personas?client_id=...
-PUT    /api/v1/memory/personas/{persona_id}
-DELETE /api/v1/memory/personas/{persona_id}
-GET    /api/v1/memory/weekly-logs?client_id=...
-GET    /api/v1/memory/usage-events
-GET    /api/v1/memory/clients
-GET    /api/v1/memory/clients/{client_id}
-PATCH  /api/v1/memory/clients/{client_id}
-DELETE /api/v1/memory/clients/{client_id}
-```
-
-### Campaigns reporting (Google Ads RMF-compliant, read-only) — `routes/campaigns.py`
-```
-GET /api/v1/me/campaigns?account_id=...&date_range=...
-GET /api/v1/me/campaigns/{id}/ad-groups
-GET /api/v1/me/campaigns/{id}/keywords
-```
-Note: this router uses a `/me/*` subpath. It's the only router that does.
-
-### Optimization — `routes/optimization.py`
-```
-GET    /api/v1/optimization/session-check
-GET    /api/v1/optimization/templates
-GET    /api/v1/optimization/templates/{key}
-POST   /api/v1/optimization/programs/from-template
-GET    /api/v1/optimization/experiments
-GET    /api/v1/optimization/experiments/{id}
-DELETE /api/v1/optimization/experiments/{id}
-POST   /api/v1/optimization/experiments/{id}/evaluate
-GET    /api/v1/optimization/learnings
-DELETE /api/v1/optimization/learnings/{id}
-GET    /api/v1/optimization/programs
-POST   /api/v1/optimization/programs
-PATCH  /api/v1/optimization/programs/{id}
-DELETE /api/v1/optimization/programs/{id}
-POST   /api/v1/optimization/cleanup       ← dry_run=true default
-GET    /api/v1/optimization/google/search-terms
-GET    /api/v1/optimization/google/quality-score
-GET    /api/v1/optimization/meta/creative-fatigue
-```
-
-### Monitoring webhook config — `routes/monitoring_webhook.py`
-```
-GET    /api/v1/me/monitoring/webhook
-PATCH  /api/v1/me/monitoring/webhook       ← auto-generates secret on first set
-DELETE /api/v1/me/monitoring/webhook
-POST   /api/v1/me/monitoring/webhook/test  ← sends test payload
-```
-
-### Other routers (not detailed, but they exist)
-`routes/auth_user.py`, `routes/auth_flows.py`, `routes/webhooks.py`, `routes/stripe_webhooks.py`, `routes/user_profile.py`, `routes/billing.py`, `routes/creatives.py`, `routes/dam.py`, `routes/evaluation.py`, `routes/agent.py`
-
-### Endpoints NOT yet built (needed for onboarding flows — see ONBOARDING-FLOWS §7)
-```
-GET  /api/v1/me/onboarding/brief?url=...&journey=fresh|existing
-POST /api/v1/me/onboarding/ingest
-GET  /api/v1/me/reports/monthly/{client_id}/brief
-POST /api/v1/me/reports/monthly/{client_id}/attach
-GET  /api/v1/me/clients/active    ← OpenClaw config sync target
-```
+- **Base:** `https://api.adros.ai/api/v1`
+- **Auth:** `Authorization: Bearer lyr_...`
+- **OpenAPI:** [api.adros.ai/docs](https://api.adros.ai/docs) — always trust this over docs if they diverge
+- **Key route groups:** orchestrator (tasks/events/approve/reject/comments/blockers), workspace (summary/snapshot/master/review), chat, files, campaigns, monitoring, contract, integrations
+- **→ Full topic index:** [REST — Dashboard & Orchestration](/integrations/rest-dashboard)
 
 ---
 
-## 6. Workflow engine — the 9 authoritative playbooks
+## 6. Webhooks (monitor output)
 
-**File:** `api/services/workflow_guides.py` (1,242 lines, authoritative)
-**Mirror (raw text for LLM injection):** `api/mcp/workflow_guides.py`
-**Intake questions:** `api/mcp/intake_questions.py` (329 lines)
+When configured (`POST /me/monitoring/webhook`), Adros POSTs monitor results daily at 8am SGT.
 
-Every marketing task Adros handles is one of these 9 workflows. Specialists call `get_workflow_guide(type)` and get the exact sequence of tool calls.
+**Payload structure (v1.1):**
 
-| `workflow_type` | Name | Output |
-|---|---|---|
-| `keyword_research` | Standalone keyword research | `[Client]_Keyword_Research.xlsx` |
-| `market_research` | Market / competitor analysis | `[Client]_Market_Research.xlsx` |
-| `meta_campaign_build` | New Meta campaign from scratch | `[Client]_Meta_Ads_Structure.xlsx` (6 tabs) + copy |
-| `meta_audit` | Audit existing Meta ads | `[Client]_Meta_Ads_Audit.xlsx` (6 tabs) + health score |
-| `google_campaign_build` | New Google campaign from scratch | Structure `.xlsx` |
-| `google_audit` | Audit existing Google ads | Audit `.xlsx` + health score |
-| `creative_only` | Generate copy + visuals for existing campaign | Copy `.xlsx` + images |
-| `campaign_launch` | Deploy built campaigns to platforms | Live campaigns |
-| `optimization` | Weekly review loop | Action plan + optional experiments |
-
-Each workflow dict has: `name`, `trigger`, `description`, `platforms[]`, `mcp_servers[]`, `fallback_strategy`, `phases[]` (ordered, with `steps[]`, `tools[]`, `memory[]`), `outputs[]`, `memory_actions[]`.
-
-Many phases include **`USER CHECKPOINT:` markers** — these are explicit "stop and wait for human approval" gates. Orchestration layers should honor these as approval pauses, not silently continue.
-
-**Key insight:** client onboarding is **not a new workflow** — it's a chained sequence of these 9. See [Onboarding Flows](/integrations/onboarding-flows) for how Journey A and Journey B chain them.
-
----
-
-## 7. Autonomous monitor (the webhook you receive)
-
-**File:** `api/services/autonomous_monitor.py` (672 lines, start here)
-
-### Schedule
-- Runs daily at **00:00 UTC (8am SGT)**
-- Checked every hour via `autonomous_monitor_loop`
-- Minimum 20h between runs (prevents double-fires)
-- Started from `main.py` lifespan as a background asyncio task
-
-### Subscriber filter
-```python
-plan_tier IN ("pro", "pro_annual", "trial")
-AND is_active = true
-AND cancelled_at IS NULL
-AND payment_failed_at IS NULL
-AND (has_meta OR has_google)  # at least one ad platform connected
-AND (monitoring_emails_enabled OR monitoring_webhook_url)  # at least one channel
-```
-
-### Checks (6 in order)
-Each check produces 0+ issues. All wrapped in try/except — one check failing doesn't stop the others.
-
-1. **`session_check.session_start_check`** → overdue experiments + ecosystem alerts + compliance blocking
-2. **`creative_fatigue_detector.detect_creative_fatigue`** → per Meta account (first 3) → `fatigued_ads` + `early_warning_ads`. Critical if frequency > 5.0
-3. **`advantage_plus_detector.get_advantage_plus_campaigns`** → Meta Advantage+ campaigns flagged for manual review
-4. **`search_term_analyzer.analyze_search_terms`** → Google, per customer (first 3). Issue if wasted_spend > $20. Critical if > $100. Notify operator if > $100. Also flags low quality-score keywords (>= 3 issues)
-5. **`rsa_asset_monitor.analyze_rsa_assets`** → Google RSAs below "Good" ad strength
-6. **`google_conversion_health.check_google_conversion_health`** → health_score 0-100, status `excellent|good|fair|poor`. Notify operator if status="poor"
-
-### Per-issue structure (`_add_issue` in `autonomous_monitor.py` line 104)
-```python
-{
-    "alert_type": str,            # machine-readable: "creative_fatigue" etc.
-    "severity": "critical|warning|info",
-    "headline": str,              # short title
-    "summary": str,               # 1-2 sentence detail
-    "action": str,                # what to do
-    "link": str,                  # direct URL to fix
-    "client_name": str,           # 'default' for solo, account_id for agency
-    "recommended_specialist": str,  # runtime actor id: adros_ceo | adros_cmo | adros_cd | adros_deployer
-    "notify_sam": bool,           # legacy field name — "True if the human operator should be pinged immediately"
-    "metrics": dict,              # structured metrics for routing logic
-    "dedupe_key": str,            # 16-char sha256 hash (see below)
-    "source_run_id": str,         # UUID correlating all issues from this run
-    "timestamp": str,             # ISO8601 UTC
-    # Legacy fields kept for backwards compat:
-    "type": str, "title": str, "detail": str,
-}
-```
-
-### Dedupe key formula
-```python
-dedupe_input = f"{alert_type}:{client_name}:{headline}".lower()
-dedupe_key = hashlib.sha256(dedupe_input.encode()).hexdigest()[:16]
-```
-Same alert type + same client + same headline = same dedupe_key. Your webhook receiver should use this as the authoritative dedupe identifier.
-
-### Webhook payload v1.1 (exact shape from `_send_monitoring_webhook`)
 ```json
 {
-  "event": "monitoring_alert",
   "version": "1.1",
-  "source_run_id": "<uuid>",
-  "user_id": "<uuid>",
-  "user_email": "operator@example.com",
-  "checked_at": "2026-01-15T00:00:00+00:00",
-  "severity": "critical|warning|info",
-  "issue_count": 12,
-  "notify_sam_count": 3,
-  "affected_clients": ["Acme Travel", "Acme Wellness"],
-  "alert_types": ["creative_fatigue", "search_term_waste", "rsa_health"],
-  "issues": [ ... array of issue objects ... ]
+  "timestamp": "2026-04-11T00:00:00Z",
+  "user_id": "...",
+  "summary": { "total_issues": 3, "critical": 1, "warning": 2 },
+  "issues": [
+    {
+      "alert_type": "creative_fatigue",
+      "severity": "critical",
+      "headline": "Ad frequency > 5 on 3 Meta ads",
+      "summary": "...",
+      "action": "Refresh creatives",
+      "recommended_specialist": "adros_cd",
+      "dedupe_key": "creative_fatigue|client_name|headline"
+    }
+  ]
 }
 ```
 
-> **Legacy field naming:** `notify_sam_count` is the production field name and maps to the per-issue `notify_sam` flag. This is legacy naming from Adros' early development — it means "should the human operator be pinged immediately." A future schema version will rename it to `notify_operator_count`. For now, document/parse it under its current name.
+**Signature:** `X-Adros-Signature: sha256=<hex>` — HMAC-SHA256 of `sort_keys=True` JSON body using your webhook secret.
 
-### Webhook delivery details
-- **POST** with `Content-Type: application/json`, `User-Agent: Adros-Monitor/1.0`
-- **Signature header:** `X-Adros-Signature: sha256=<hex>`
-- **Signature input:** `json.dumps(payload, sort_keys=True).encode("utf-8")` — receivers MUST sort keys when verifying
-- **Timeout:** 15 seconds (`httpx.AsyncClient(timeout=15.0)`)
-- **NO automatic retries** in the current code. 5xx / timeout / network error = logged and dropped. If the receiver is down, that day's alerts are lost unless Adros-side retries are implemented. ← **Known gap, documented for awareness.**
-- Success = HTTP 2xx only. Any non-2xx is logged as a warning but no retry fires.
+**Deduping:** Same alert type + same client + same headline = same `dedupe_key`. Use this as the authoritative dedupe identifier.
 
-### Email fallback
-Same run also sends an email via Resend if `monitoring_emails_enabled=true`. Email uses **Haiku 4.5** (`claude-haiku-4-5-20251001`) to generate a friendly 3-5 sentence summary of the issues. Falls back to a plain HTML template if Anthropic key is unavailable or the call fails.
+**No retries** on delivery failure — design your receiver accordingly.
 
 ---
 
-## 8. Creative pipeline (canonical flow for every production creative)
+## 7. Contract layer
 
-Hard rules baked into the MCP server instructions:
-1. **ALWAYS `mode='bold'`** — produces editorial / cinematic output (as opposed to `autonomous` which is more literal)
-2. **ALWAYS `generator='nano_banana_pro'`** — Gemini 2.5 Pro image model, better than nano_banana_2 for ads
-3. **ALWAYS `auto_select=True`** on `build_creative_prompt` unless the operator explicitly picks a pattern
+Deterministic deliverable specs keyed by `(stage, task_type)`. Each spec defines:
 
-### The canonical sequence
-```python
-# 1. Find strategic match
-patterns = match_strategy(
-    industry="fitness",
-    awareness_stage="problem",
-    risk_tolerance="medium"
-)
+- `produce` — what artifacts the specialist must deliver
+- `accept` — what the specialist consumes
+- `recommended_specialist` — runtime actor ID (`adros_ceo`, `adros_cmo`, `adros_cd`, `adros_deployer`)
+- `review_gates` — human checkpoints
+- `next_stage` — where to go after completion
 
-# 2. Compose the prompt (auto-selects best pattern, loads brand + business + persona)
-prompt = build_creative_prompt(
-    auto_select=True,
-    client_name="Acme Travel",  # your client name
-    mode="bold"
-)
-# Internally: loads pattern.blueprint_json + enrichment_metadata
-#           + image_generation_prompt (as "REFERENCE VISUAL DIRECTION")
-#           + business_context + personas + brand_assets
-#           + ad_language from business_context
-
-# 3. Generate the image
-image = generate_creative(
-    prompt=prompt,
-    generator="nano_banana_pro"
-)
-# Subject to 60s idempotency cache + 20/hr rate limit
-
-# 4. (Optional) QA pass
-validate_creative(image_url=image["url"])
-```
-
-### Reference image handling
-- Brand assets (logos, product photos) are auto-downscaled to **1024px via Pillow LANCZOS** before being sent to Gemini
-- Gemini client timeout: **180_000 ms** (3 min)
+**→ Full spec table:** [Contract Layer](/integrations/contract-layer)
 
 ---
 
-## 9. Brand extraction / DAM
+## 8. Quality track (audits)
 
-**File:** `api/services/brand_extraction_service.py` + `api/services/dam_service.py`
+When enabled (`AUDIT_QUALITY_TRACK_ENABLED` env var + migration `025_audit_quality_track`):
 
-`build_brand_profile(url)`:
-1. Crawls the client's website (Firecrawl)
-2. Extracts colors (hex + RGB from CSS + inline styles)
-3. Extracts fonts (font-family + Google Fonts detection)
-4. Finds logo URL (og:image, favicon, heuristics — with local `fallback_url` per request, NOT function attribute, to prevent cross-request contamination)
-5. Auto-uploads to DAM as `brand_asset` rows
+- **Scorecards** on completed audit tasks
+- **Guardrails** for audit quality thresholds
+- **Artifact persistence** — markdown, JSON, PDF paths stored on R2
+- **Audit trends** per project
 
-DAM asset types: `logo`, `color_palette`, `font`, `brand_guide`, `product_photo`, `product_angle`.
-
-Product angles: `dam_service.generate_product_angles(product_image_url)` uses Nano Banana Pro with the source product as reference to generate 4 lifestyle/context variations. Uses `generate_ad_image(prompt, reference_image_urls=[url], use_pro_model=True, aspect_ratio='1:1')` — **not** a non-existent `generate_image` function (Session 72 bugfix).
+Confirm on your deployment before advertising to end users.
 
 ---
 
-## 10. Services layer (what lives in `api/services/`)
+## 9. Creative pipeline
 
-Worth knowing these exist. One file per concern:
-
-| Service | Purpose |
-|---|---|
-| `autonomous_monitor.py` | Daily cron + webhook emitter (see §7) |
-| `workflow_guides.py` | Structured workflow dicts |
-| `pattern_service.py` | Pattern search, matching, auto-select |
-| `session_check.py` | Overdue experiments + compliance |
-| `creative_fatigue_detector.py` | Meta frequency + CTR analysis |
-| `advantage_plus_detector.py` | Meta Advantage+ detection |
-| `search_term_analyzer.py` | Google search term waste |
-| `rsa_asset_monitor.py` | Google RSA health |
-| `google_conversion_health.py` | Google conversion tracking health |
-| `prompt_template_engine.py` | Builds composite Nano Banana Pro prompts |
-| `image_generation_service.py` | Gemini client wrapper |
-| `dam_service.py` | Brand asset + creative storage |
-| `brand_extraction_service.py` | Website brand extraction |
-| `visual_reference_service.py` | Reference image validation |
-| `keyword_research_service.py` | DataForSEO wrapper |
-| `landing_page_service.py` | Landing page audit |
-| `meta_frameworks.py` | Meta targeting architectures |
-| `google_ads_service.py` / `facebook_service.py` | Platform API wrappers |
-| `optimization_agent.py` | Experiment runner |
-| `experiment_logger.py` / `google_experiment_logger.py` | Experiment state |
-| `holistic_evaluator.py` / `performance_evaluator.py` | Results evaluation |
-| `learning_accumulator.py` | Writes to `learnings` table |
-| `llm_service.py` | Anthropic wrapper |
-| `memory_service.py` | Business context / persona CRUD |
-| `email_service.py` | Resend wrapper |
-| `token_refresh_service.py` | Meta/Google OAuth refresh |
-| `billing_service.py` | Credit + plan enforcement |
-| `winback_service.py` / `credit_notification_service.py` | Email sequences |
-| `security_monitor.py` | Audit log |
-| `cadence_guard.py` / `attribution_window.py` | Safety guards |
-| `duplication_scaler.py` | Winner scaling logic |
-| `render_adapters.py` | Output format adapters |
-| `program_templates.py` | Optimization program templates |
-| `ghl_service.py` | GoHighLevel CRM integration |
-| `supabase_storage.py` | File bucket wrapper |
-| `user_service.py` | User CRUD |
+- Always runs with `mode='bold'` + `nano_banana_pro` generator
+- 60-second idempotency window + 20/hr rate limit
+- Pattern blueprints anchor generation (style, composition, copy framework)
+- Product guardrails applied before delivery
+- Output lands in task artifacts + R2
 
 ---
 
-## 11. Known foot-guns (things that have burned us)
+## 10. Daily autonomous monitor — 6 checks
 
-1. **Account mismatch** — Adros users are separate accounts. Brand assets uploaded as `test2@adros.ai` won't show for `gst3958@gmail.com`. Always work off `user_id`/`user_token`, never account name.
+| # | Check | Platform | What it looks for |
+|---|-------|----------|-------------------|
+| 1 | **Session health** | Adros | Missing business context, personas, or recent weekly logs |
+| 2 | **Creative fatigue** | Meta | Ad frequency > threshold; flags stale creatives |
+| 3 | **Search term waste** | Google | High-spend, low-conversion search terms; quality score issues |
+| 4 | **RSA health** | Google | Responsive search ads below "good" strength |
+| 5 | **Conversion health** | Google | Conversion tracking status and score |
+| 6 | **Advantage+ audit** | Meta | Campaign configuration issues |
 
-2. **Client scoping** — `client_id=NULL` means solo, `client_id=<uuid>` means agency-specific. The `_client_filter` helper is strict — mixing them creates ghost data. `schedule_optimization_review` MUST pass `client_id` explicitly.
-
-3. **MCP `user_token` edge case** — if token comes from URL/header context, the param will be empty string. Do NOT guard with `if user_token:` — use the context resolver. This bit us in 3 tools in Session 72.
-
-4. **Pattern DB fields hidden from UI** — `enrichment_metadata` and `image_generation_prompt` are stripped from the `PatternDetail` Pydantic schema to prevent scraping. They ARE available to MCP calls. Do NOT expose them via any public endpoint.
-
-5. **Lead Gen TOS trap** — Meta Lead Gen requires TOS acceptance **per app per page**. Adros being TOS-accepted on one page doesn't carry over. Client must add Adros app ID to their Business Manager as a partner.
-
-6. **Webhook has no retries** — see §7. If OpenClaw's receiver is down at 8am SGT, that day's alerts are dropped. Needs fixing.
-
-7. **Monitor caps at first 3 ad accounts** — `user_info.get("meta_ad_account_ids", [])[:3]` and `google_customer_ids[:3]`. Users with > 3 accounts only get the first 3 checked. Deliberate cost control, but worth knowing.
-
-8. **`clients` table has no `is_active` flag** — OpenClaw's "which clients are current" question has no answer from the DB today. See integration notes §3.1.
+Each issue includes `recommended_specialist` (runtime actor ID) for routing into tasks.
 
 ---
 
-## 12. Integration contract summary
+## 11. Known foot-guns (integration pitfalls)
 
-### Outbound from Adros (what Adros pushes to you)
-- **Daily monitoring webhook** — 8am SGT, HMAC-signed (`X-Adros-Signature: sha256=<hex>`, sort_keys JSON), v1.1 payload. No retries on failure.
-
-### Inbound to Adros (what you can call)
-- **MCP tools** — 74 tools via Streamable HTTP at `/mcp`. Auth via `X-User-Token` header.
-- **REST endpoints** — all under `/api/v1/*`. Auth via Supabase JWT in `Authorization: Bearer`.
-- **Pattern endpoints** — `/api/v1/tools/*` for direct pattern lookups without MCP overhead.
-
-### Data contracts
-- All `.xlsx` output templates are controlled server-side via `get_output_template(type)`
-- All workflow playbooks come from `get_workflow_guide(type)`
-- All intake questions come from `get_intake_questions(type)`
-- **Never hand-roll these schemas on the OpenClaw side.** Ask Adros.
-
-### Authentication
-| Surface | Auth |
-|---|---|
-| MCP tools | `X-User-Token` header OR `user_token` param |
-| REST `/api/v1/*` | Supabase JWT `Authorization: Bearer <jwt>` |
-| Webhook verification | HMAC-SHA256 of sort_keys JSON body with user's `monitoring_webhook_secret` |
+1. **Task ownership** — always verify the caller owns the task (user_id match) before mutating; the service layer relies on callers to enforce this in some paths
+2. **Event ordering** — task events should be queried `ORDER BY created_at DESC` for "latest" feeds; confirm the endpoint you're using does this
+3. **R2 env** — file upload endpoints require R2 credentials configured on the server; errors surface as config issues, not auth
+4. **Quality track** — scorecard/guardrail endpoints return empty until migration + env flag are both live
+5. **Campaign scope** — Google/Meta campaign data depends on user's connected accounts and scope selection; fallback behavior is surfaced in the UI
+6. **WS auth** — WebSocket connections use token as query param (browsers cannot set Bearer header on WS); task ownership is verified server-side before streaming
+7. **Monitor retries** — there are none; design your webhook receiver to be resilient
+8. **Contract `recommended_specialist`** — values are runtime actor IDs (`adros_*`), not display names; legacy values like "Hermes" or "Data Analyst" are retired
+9. **Bearer case** — use `Authorization: Bearer lyr_...` (capital B); some routes may be case-sensitive
 
 ---
 
-## 13. Files OpenClaw should read (if you DO open the repo)
+## 12. File storage — Cloudflare R2
 
-Priority order:
-
-1. **`api/main.py`** (185 lines) — routers, middleware chain, lifespan, root endpoint declaration (has the tool catalog JSON)
-2. **`api/services/autonomous_monitor.py`** (672 lines) — the monitor + webhook. Read this before building your receiver.
-3. **`api/services/workflow_guides.py`** (1,242 lines) — the 9 workflows, authoritative
-4. **`api/mcp_server.py`** (4,108 lines) — MCP tool definitions. Huge file. Search for `@mcp.tool()` to navigate.
-5. **`api/models/user.py`** (107 lines) — user schema, webhook fields
-6. **`api/models/memory.py`** (139 lines) — business_context, personas, weekly_log schemas
-7. **`api/models/pattern.py`** (165 lines) — pattern + blueprint schema
-8. **`api/routes/monitoring_webhook.py`** (189 lines) — webhook config endpoints
-9. **`api/routes/memory_routes.py`** — memory REST surface
-10. **`api/mcp/meta_ads/read_tools.py` + `write_tools.py`** — Meta API wrappers
-
-But the point of THIS doc is that you shouldn't have to.
+- **S3-compatible** API, client-scoped prefixes
+- Primary store for: dashboard Files uploads, workspace snapshots, audit artifacts
+- Env required: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, bucket config
+- Files routes: upload, browse, download, delete — see [REST — Dashboard](/integrations/rest-dashboard#files-r2)
 
 ---
 
-## 14. Version + verification trail
+## 13. Memory layer
 
-- **Adros version at time of writing:** 0.3.0 (from `main.py` FastAPI constructor)
-- **MCP SDK:** `mcp==1.26.0` (Streamable HTTP, spec `2025-03-26`)
-- **Tool count:** 74 (declared in `main.py` root endpoint, line 152)
-- **Last repo verification:** 2026-04-11, reading from `c:\Cursor Projects\Adros\adros` + `adros-app` (dashboard routes and R2 file service)
-- **Pattern DB count:** 4,022 rows (from prior Session 72 work)
+- `business_context` — brand positioning, goals, constraints
+- `personas` — target audience profiles
+- `weekly_logs` — append-only weekly action summaries
+- Scoped by `(user_id, client_id)`; `client_id = NULL` for solo mode
+- Used by Managed Agents for context-rich decision making
 
-If any of these drift, re-verify against the live repo. I'll update this doc when Adros hits a material breaking change.
+---
+
+## 14. Security model
+
+- All routes require valid JWT (`lyr_...` token)
+- Multi-tenant scoping enforced at query level (user_id + optional client_id)
+- Client integration secrets encrypted at rest (Fernet)
+- File access scoped to owning user/client
+- MCP and REST use the same auth — no separate permission model
+- Cross-tenant access should be verified at the service layer for any new routes
 
 ---
 
 ## 15. TL;DR (if you read nothing else)
 
-- **Adros = hybrid marketing OS:** marketing brain (patterns, memory, creative, monitor) **plus** dashboard orchestration (tasks, timeline, approvals, workspace, files, campaigns). External stacks (Paperclip, OpenClaw, custom) remain optional conductors.
-- **Backend:** FastAPI 0.3.0 on Railway at `api.adros.ai`. Postgres via Supabase. **Files / audit blobs:** R2.
-- **MCP:** 74 tools at `/mcp`, Streamable HTTP, auth via `X-User-Token`.
-- **REST:** all under `/api/v1/*`, JWT auth, `/me/monitoring/webhook` for config.
-- **9 workflow playbooks** in `api/services/workflow_guides.py` — the authoritative marketing SOPs.
-- **Daily monitor** runs 8am SGT, fires 6 checks, POSTs v1.1 webhook with HMAC signature. **No retries on failure.**
-- **Creative pipeline:** always `mode='bold'` + `nano_banana_pro`, 60s idempotency + 20/hr rate limit.
-- **Memory layer:** business_context + personas + weekly_logs, scoped by (user_id, client_id) where `client_id=NULL` is solo.
-- **Pattern moat:** 4,022 patterns with enrichment_metadata + image_generation_prompt hidden from public schemas.
-- **Quality track:** audit scorecards / guardrails / artifact persistence — confirm `AUDIT_QUALITY_TRACK_ENABLED` and deploy on your environment.
-- **Five new endpoints** still need to be built for onboarding + monthly reports (see [Onboarding Flows §7](/integrations/onboarding-flows)).
-
-— Adros team
+- **Adros = hybrid marketing OS:** deterministic rails (tasks, events, files, scoped integrations) + Managed Agent depth (CMO for audits/strategy, CD for creative) + operator dashboard (Command Center, Workspace, Campaigns, CEO)
+- **Backend:** FastAPI 0.3.0 on Railway at `api.adros.ai`. Postgres via Supabase. Files on R2.
+- **MCP:** ~74 tools at `/mcp`, Streamable HTTP, auth via `X-User-Token`.
+- **REST:** all under `/api/v1/*`, JWT auth.
+- **Runtime actors:** `adros_ceo`, `adros_cmo`, `adros_cd`, `adros_deployer` — not legacy names.
+- **9 workflow playbooks** in `api/services/workflow_guides.py`.
+- **Daily monitor** runs 8am SGT, 6 checks, HMAC-signed webhook. No retries.
+- **Quality track:** audit scorecards/guardrails — confirm env flag + migration on your deployment.
+- **Pattern moat:** 4,022 patterns with enrichment metadata.
+- **Artifact canon:** versioned analysis, mastered specs, traceable from strategy through deploy.

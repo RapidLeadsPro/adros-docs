@@ -1,53 +1,56 @@
 ---
 title: Introduction
-description: Adros — hybrid marketing OS for operators and AI agents. Pattern intelligence, MCP tools, Command Center orchestration, strategy workspace, live campaign data, and client-scoped artifacts.
+description: Adros — hybrid marketing OS. Managed-agent depth, deterministic orchestration rails, strategy artifacts, live campaign data, and client-scoped files. Not another chatbot.
 ---
 
 # Adros
 
-**Hybrid marketing OS** — built for teams who need **traceable orchestration** and **senior-marketer judgment** in the same stack.
+**The marketing operating system that turns real ad accounts and strategy into traceable work.**
 
-Adros combines:
+Adros has three layers:
 
-1. **Operator surfaces** at [app.adros.ai](https://app.adros.ai) — client-scoped **Command Center** (task inbox, live timeline, approvals), **Strategy Workspace** (staged artifacts and masters), **Files** (R2-backed storage), **Campaigns** (Google and Meta when connected), and **Adros CEO** (fast coordination and routing). The dashboard is not an afterthought; it is where work becomes **auditable**.
-
-2. **Agent integration** — the same backend powers **~74 MCP tools** (Streamable HTTP) so Claude, Cursor, Paperclip-style stacks, or custom agents call the same APIs operators see.
-
-3. **Pattern intelligence** — **4,022** performance-tested ad patterns across creative styles and copy frameworks, plus memory (business context, personas, weekly action log) scoped per client.
-
-Plug Adros into any MCP-compatible client and the agent gets marketing execution hands on Meta/Google **and** the same task/events model the dashboard uses.
+1. **Deterministic rails** — tasks, event timelines, approvals, blockers, client-scoped files, and scoped integrations. Work is auditable whether it starts in the dashboard or via MCP.
+2. **Managed-agent depth** — when the problem is ambiguous (audits, strategy synthesis, creative direction), Adros routes to a **Managed Agent** (CMO for analysis, CD for creative) that can go deep — not a single-shot tool call.
+3. **Operator surfaces** — a full dashboard at [app.adros.ai](https://app.adros.ai) where humans see the same spine the agents use: **Command Center** (task inbox, timeline, approvals), **Strategy Workspace** (staged artifacts and masters), **Files** (R2-backed storage), **Campaigns** (live Google/Meta data), and **Adros CEO** (coordination that routes into tracked work).
 
 ---
 
 ## What's inside
 
-- **Command Center** — tasks as the unit of work; status, cost, specialist/agent attribution; **event timeline** for traceability; approve/reject flows; real-time task updates where enabled
-- **Strategy Workspace** — lifecycle stages (research → economics → structure → copy/creative → audit → deploy) with **canonical artifacts** and promote-to-master discipline
-- **Files** — uploads and browsing backed by **Cloudflare R2**, scoped by user/org/client like the rest of the API
-- **Campaigns** — live performance views for **Google Ads** and **Meta Ads** when tokens and account selection are configured; scope and fallback behavior surfaced in-product
-- **Quality track (audits)** — scorecards, guardrails, and persisted audit artifacts (markdown/JSON/PDF paths) on completed audits; gated by `AUDIT_QUALITY_TRACK_ENABLED` in backend env — confirm on your deployment
-- **4,022 performance-tested ad patterns** — the creative moat
-- **~74 MCP tools** — patterns, creative generation, campaign actions, memory, monitoring, and more
-- **Daily autonomous monitor** — health checks (creative fatigue, search waste, RSA health, conversion health, Advantage+, experiments), webhook to your orchestration URL
-- **Contract layer** — deterministic deliverable specs for lifecycle stages (see [Contract Layer](/integrations/contract-layer))
-- **Creative pipeline** — generation anchored to pattern blueprints (e.g. Gemini image path), with product guardrails
-- **Memory layer** — business context, personas, weekly logs; append-only where it matters for audit
+### Operator surfaces (dashboard)
 
----
+| Surface | Route | Purpose |
+|---------|-------|---------|
+| **Command Center** | `/command-center` | Client-scoped task inbox with live event timeline, approve/reject, blockers, comments → follow-up tasks |
+| **Strategy Workspace** | `/workspace` | Staged strategy artifacts (research → economics → structure → copy/creative → audit → deploy), canonical masters, promote, deploy request |
+| **Files** | `/files` | Upload and browse backed by **Cloudflare R2**, scoped by user/org/client |
+| **Campaigns** | `/campaigns` | Live Google Ads and Meta Ads performance when accounts connected; scope and fallback behavior surfaced |
+| **Adros CEO** | `/ceo` | Coordination chat that auto-routes into tracked tasks (audit, creative, deploy) |
+| **Connections** | `/accounts` | Google/Meta account linking and scope selection |
 
-## Hybrid in one sentence
+### Backend capabilities
 
-**Deterministic rails** (tasks, events, files, scoped integrations) **plus** **managed-agent depth** where judgment is required — so you get speed *and* a paper trail, not a black-box chat.
+- **4,022 performance-tested ad patterns** — creative moat across styles and frameworks
+- **Managed Agents** — `adros_cmo` (audits, research, structure, optimization), `adros_cd` (copy/creative), `adros_deployer` (launch/changes), `adros_ceo` (routing/intake)
+- **Daily autonomous monitor** — 6 health checks (creative fatigue, search waste, RSA health, conversion health, Advantage+, experiments), HMAC-signed webhook to your URL
+- **Quality track** — audit scorecards, guardrails, and artifact persistence on completed audits (gated by `AUDIT_QUALITY_TRACK_ENABLED` env var)
+- **Contract layer** — deterministic deliverable specs per lifecycle stage
+- **Creative pipeline** — generation anchored to pattern blueprints, product guardrails
+- **Memory layer** — business context, personas, weekly logs scoped per client
+- **~74 MCP tools** — Streamable HTTP at `/mcp` for Claude, Cursor, or custom agents
+- **Artifact canon** — versioned analysis, mastered operating specs, traceable from strategy through deploy
 
 ---
 
 ## Production vs repo
 
-Dashboard and backend features ship continuously. **What you see on `app.adros.ai` / `api.adros.ai` may lag the latest Git `main` by one deploy.** For integration testing, prefer verifying against the environment your token targets; treat this site as the **intent** of the system, validated against live OpenAPI and behavior.
+Dashboard and backend features ship continuously. **What you see on `app.adros.ai` / `api.adros.ai` may lag the latest Git `main` by one deploy.** For integration testing, verify against your target environment; treat this site as the **intent** of the system.
 
 ---
 
-## Get started in 3 minutes (MCP)
+## Get started
+
+### MCP (3 minutes)
 
 ```json
 {
@@ -62,7 +65,11 @@ Dashboard and backend features ship continuously. **What you see on `app.adros.a
 
 1. Sign up at [app.adros.ai](https://app.adros.ai) and copy your MCP token from **Settings → MCP**
 2. Paste the JSON above into your AI client's MCP config
-3. Restart the client — you should see the Adros tool set loaded
+3. Restart the client — Adros tools load automatically
+
+### Dashboard (no setup)
+
+Sign in at [app.adros.ai](https://app.adros.ai) and use Command Center, Strategy Workspace, Files, Campaigns, and CEO directly. Same backend, same auth model, same tasks and artifacts.
 
 **→ Full step-by-step: [Quickstart](/quickstart)**
 
@@ -72,14 +79,13 @@ Dashboard and backend features ship continuously. **What you see on `app.adros.a
 
 | If you want to... | Read |
 |---|---|
-| Get Adros running in 3 min | [Quickstart](/quickstart) |
+| Get running in 3 min | [Quickstart](/quickstart) |
 | See every tool Adros exposes | [Tool Catalog](/tools) |
 | Understand data model + stack + internals | [Technical Overview](/integrations/overview) |
 | Map REST routes for tasks, workspace, files, campaigns | [REST — Dashboard & Orchestration](/integrations/rest-dashboard) |
-| Frontend ↔ backend alignment (routes, files, Command Center) | [UI Handoff (2026-04-10)](/integrations/ui-handoff-2026-04-10) |
-| Design onboarding (fresh client vs existing ad account) | [Onboarding Flows](/integrations/onboarding-flows) |
-| Integrate with your orchestration stack | [Integration Notes](/integrations/integration-notes) |
-| Use the Contract layer for deterministic specialists | [Contract Layer](/integrations/contract-layer) |
+| Frontend ↔ backend alignment | [UI Handoff (2026-04-10)](/integrations/ui-handoff-2026-04-10) |
+| Understand runtime actors (CEO, CMO, CD, Deployer) | [Onboarding Flows — Terminology](/integrations/onboarding-flows#terminology-april-2026) |
+| Use the Contract layer for lifecycle specs | [Contract Layer](/integrations/contract-layer) |
 | Debug a problem | [FAQ & Troubleshooting](/faq) |
 
 ---
@@ -99,4 +105,4 @@ Dashboard and backend features ship continuously. **What you see on `app.adros.a
 
 ## Who makes this
 
-Adros is built by [Matrix AI Solution Pte Ltd](https://app.adros.ai) in Singapore. If anything on this site contradicts **observed behavior** of the deployment you are using, trust the deployment and file an issue — this site should catch up on the next docs pass.
+Adros is built by [Matrix AI Solution Pte Ltd](https://app.adros.ai) in Singapore. If anything on this site contradicts **observed behavior** of the deployment you are using, trust the deployment and file an issue.
