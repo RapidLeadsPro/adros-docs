@@ -123,12 +123,12 @@ Your `SETTINGS-AND-FILES-MAP.md` shows agent IDs hardcoded in `webhook.py` and `
 - Add a mapping table in your config externalization work (P0 #1):
   ```yaml
   agents:
-    hermes:
+    adros_deployer:
       paperclip_id: 6711eb63-...
-      adros_user_token: <stored in ~/.openclaw/.env as ADROS_TOKEN_HERMES>
-    creative_director:
+      adros_user_token: <stored securely as ADROS_TOKEN_DEPLOYER>
+    adros_cd:
       paperclip_id: dbced9b6-...
-      adros_user_token: <ADROS_TOKEN_CREATIVE_DIR>
+      adros_user_token: <ADROS_TOKEN_CD>
   ```
 - Without this, rotating an Adros user or onboarding a new specialist silently breaks MCP auth.
 
