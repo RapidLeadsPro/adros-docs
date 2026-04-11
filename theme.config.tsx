@@ -2,57 +2,22 @@ import React from 'react'
 import { DocsThemeConfig, useConfig } from 'nextra-theme-docs'
 
 /**
- * Adros brand identity (source of truth)
+ * Adros brand identity
  *
- * Primary neon green: #39ff14
- * Background (light): #ffffff
- * Text (primary): #0a0a0a
- * Text (muted): #3f3f3f
- * Font stack: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue
+ * Navbar + favicon use the same raster assets as app.adros.ai (`adros-app/client/public/`).
+ * Do not re-draw the mark in SVG here — it drifted from the official diamond + swoosh-A.
+ *
+ * Primary neon green (UI accents): #39ff14
  */
 
 const AdrosLogo = () => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-    <svg
-      width="28"
-      height="28"
-      viewBox="0 0 48 48"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-label="Adros"
-    >
-      {/* Outer diamond */}
-      <path
-        d="M24 3 L45 24 L24 45 L3 24 Z"
-        stroke="#39ff14"
-        strokeWidth="3"
-        strokeLinejoin="round"
-      />
-      {/* Inner A: two slanted legs + horizontal crossbar */}
-      <path
-        d="M14 36 L24 12 L34 36"
-        stroke="#39ff14"
-        strokeWidth="3.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M18 27 L30 27"
-        stroke="#39ff14"
-        strokeWidth="3.2"
-        strokeLinecap="round"
-      />
-    </svg>
-    <span
-      style={{
-        fontWeight: 800,
-        letterSpacing: '0.02em',
-        fontSize: '1.15rem',
-        color: 'inherit',
-      }}
-    >
-      ADROS
-    </span>
+  <div style={{ display: 'flex', alignItems: 'center' }}>
+    <img
+      src="/logo-horizontal.png"
+      alt="Adros"
+      height={28}
+      style={{ height: 28, width: 'auto', maxWidth: 200, objectFit: 'contain', display: 'block' }}
+    />
   </div>
 )
 
@@ -82,8 +47,9 @@ const config: DocsThemeConfig = {
         <meta name="twitter:description" content={description} />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="theme-color" content="#39ff14" />
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/favicon.svg" />
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" href="/logo-icon.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/logo-icon.png" />
       </>
     )
   },

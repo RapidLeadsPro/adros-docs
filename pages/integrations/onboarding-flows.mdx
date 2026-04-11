@@ -4,7 +4,9 @@
 **Author:** Adros team
 **Purpose:** Define the two onboarding journeys so an orchestration layer knows exactly who to trigger, in what order, with what handoff artifacts. Both journeys share the same backbone — only the starting phase differs.
 
-> **Rule that never changes:** the human operator talks only to the orchestration layer. The orchestration layer routes. Specialists execute. Adros is the marketing brain. Research lanes (Perplexity, Manus, or custom) feed findings back. The task ledger (Paperclip or equivalent) tracks state.
+> **Pattern (external stack):** the operator may work through an **optional** orchestration layer (Paperclip/OpenClaw/custom). That layer routes; Adros is the marketing brain and execution plane. Research lanes (Perplexity, Manus, or custom) feed findings back; the task ledger (Paperclip or equivalent) tracks state when you use one.
+>
+> **Pattern (native Adros):** the operator uses **Adros CEO + Command Center**; routing and tasks still land on the same backend — there is no requirement for an external orchestration layer. See [Terminology (April 2026)](#terminology-april-2026) below.
 
 > **See also (native Adros):** Operators can also run the same backbone through **Command Center** and **Strategy Workspace** on [app.adros.ai](https://app.adros.ai), with tasks, approvals, workspace masters, and files on the same backend. REST routes for those surfaces are indexed in [REST — Dashboard & Orchestration](/integrations/rest-dashboard). For how that coexists with external conductors, read [Integration Notes — §1](/integrations/integration-notes).
 
