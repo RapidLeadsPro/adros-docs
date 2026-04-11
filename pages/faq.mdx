@@ -5,7 +5,32 @@ description: Common questions, setup mistakes, and the foot-guns we've seen peop
 
 # FAQ & Troubleshooting
 
-The 15 most common questions and issues we've seen. If you're stuck, start here — the fix is probably one of these.
+Common questions and issues we've seen. If you're stuck, start here — the fix is probably one of these.
+
+## Dashboard & product
+
+### Do I have to use MCP, or can I use the app only?
+
+**You can use either or both.** The dashboard at [app.adros.ai](https://app.adros.ai) drives the same backend: **Command Center** (tasks, timeline, approvals), **Strategy Workspace**, **Files**, **Campaigns**, **CEO**. MCP is for AI clients (Claude, Cursor, custom agents) that call tools on `https://api.adros.ai/mcp`. Operators often live in the app; integrators often use MCP + REST together.
+
+### Where do approvals live?
+
+**In-app:** Command Center (`/command-center` or `/dashboard`) and the **Approvals** page when wired. **REST:** `POST /api/v1/tasks/{task_id}/approve`, `POST /api/v1/tasks/{task_id}/reject`, and `GET /api/v1/approvals/pending`. Approval emails (Resend) and optional WhatsApp nudges depend on your settings and client integration config. See [REST — Dashboard & Orchestration](/integrations/rest-dashboard).
+
+### Quality track: scorecards or guardrails missing
+
+**Symptoms:** Task loads but no scorecard, guardrails always empty, or audit artifacts not appearing.
+
+**Checks:**
+
+1. **Backend deploy** — Quality track code must be on the API you are calling.
+2. **Migration** — `025_audit_quality_track` applied to the same Postgres as the API.
+3. **Env** — `AUDIT_QUALITY_TRACK_ENABLED` not set to disable (default in code is usually on unless overridden).
+4. **Task type** — Scorecard endpoints apply to audit flows that completed the quality path; not every task is an audit.
+
+If in doubt, confirm against [OpenAPI](https://api.adros.ai/docs) and a known audit task in staging.
+
+---
 
 ## Connection & Setup
 
@@ -60,7 +85,7 @@ If that returns 200 with JSON, the token works. If it still 401s, the token is w
 }
 ```
 
-Restart Claude Desktop fully (quit, not just close window). The hammer icon at the bottom of the chat input should show 74 tools from Adros.
+Restart Claude Desktop fully (quit, not just close window). The hammer icon at the bottom of the chat input should show the full Adros tool set (on the order of **~74** tools; exact count may change with releases).
 
 ### Cursor can't find Adros tools
 
@@ -216,8 +241,9 @@ The `CreditGateMCPApp` middleware hard-blocks tool calls when `credits_used >= m
 
 ## Still stuck?
 
+- **Check [REST — Dashboard & Orchestration](/integrations/rest-dashboard)** — map of task/workspace/file/campaign routes
 - **Check the [Technical Overview](/integrations/overview)** — every known foot-gun is documented in section 11
-- **Check the [Integration Notes](/integrations/integration-notes)** — 7 architectural blind spots for anyone wiring Adros into orchestration
+- **Check the [Integration Notes](/integrations/integration-notes)** — architectural blind spots for anyone wiring Adros into orchestration
 - **Check your token works:** `curl -H "Authorization: Bearer lyr_YOUR_TOKEN" "https://api.adros.ai/api/v1/contract/specs"`
 - **Check Railway status:** if Adros itself is down (rare), every call returns 5xx — not your fault
 

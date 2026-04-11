@@ -1,0 +1,157 @@
+---
+title: REST — Dashboard & Orchestration
+description: High-level map of REST and WebSocket routes that power Command Center, Strategy Workspace, Files, Campaigns, chat, and integrations. Authoritative detail lives in OpenAPI.
+---
+
+# REST — Dashboard & Orchestration
+
+**Base URL:** `https://api.adros.ai/api/v1`  
+**Auth:** `Authorization: Bearer lyr_<your_mcp_token>` on HTTP routes (same token as Settings → MCP).
+
+This page is a **topic index**, not a full API spec. For request/response schemas, required query params, and the complete route list, use **[OpenAPI](https://api.adros.ai/docs)** on the live API.
+
+Deploys can lag repository `main`; if a path returns 404, verify your environment version.
+
+---
+
+## Command Center & tasks
+
+| Method | Path | Notes |
+|--------|------|--------|
+| `GET` | `/projects` | List projects |
+| `GET` | `/projects/{project_id}/tasks` | Tasks for a project |
+| `GET` | `/tasks` | List tasks (filters as documented in OpenAPI) |
+| `GET` | `/tasks/{task_id}` | Task detail |
+| `GET` | `/tasks/{task_id}/events` | Timeline / activity feed |
+| `POST` | `/tasks/{task_id}/approve` | Approve task |
+| `POST` | `/tasks/{task_id}/reject` | Reject with feedback |
+| `POST` | `/tasks/{task_id}/comments` | Add discussion; optional linked follow-up task |
+| `GET` | `/tasks/{task_id}/blockers` | List human-required blockers |
+| `POST` | `/tasks/{task_id}/blockers` | Create blocker |
+| `POST` | `/tasks/{task_id}/blockers/{blocker_id}/resolve` | Resolve blocker |
+| `GET` | `/approvals/pending` | Pending approvals queue |
+| `POST` | `/audits/trigger` | Trigger audit flow |
+
+### Audit quality track (when enabled)
+
+| Method | Path | Notes |
+|--------|------|--------|
+| `GET` | `/tasks/{task_id}/scorecard` | Scorecard for completed audit path |
+| `GET` | `/tasks/{task_id}/guardrails` | Guardrail status |
+| `GET` | `/projects/{project_id}/audit-trends` | Trend summary for project |
+
+Backend behavior depends on migration **`025_audit_quality_track`** and env **`AUDIT_QUALITY_TRACK_ENABLED`**. See the [Introduction](/) (Quality track bullet) and [FAQ — Quality track](/faq#quality-track-scorecards-or-guardrails-missing).
+
+---
+
+## Strategy Workspace
+
+| Method | Path | Notes |
+|--------|------|--------|
+| `GET` | `/workspace/summary?client_id=...` | Stage-oriented summary (artifacts, masters, related tasks) |
+| `POST` | `/workspace/snapshot` | Record workspace snapshot to R2 |
+| `GET` | `/workspace/stages/{stage_id}/preview` | Structure preview (e.g. CSV/XLSX row table) |
+| `POST` | `/workspace/stages/{stage_id}/master` | Promote artifact to stage master |
+| `POST` | `/workspace/stages/{stage_id}/review` | Stage review note; optional follow-up task |
+
+---
+
+## Deploy handoff
+
+| Method | Path | Notes |
+|--------|------|--------|
+| `POST` | `/deploys/request` | Create deploy task (`adros_deployer`) with manifest context |
+
+---
+
+## Chat
+
+| Method | Path | Notes |
+|--------|------|--------|
+| `POST` | `/chat` | Chat completion (supports `client_id` where applicable) |
+| `GET` | `/chat/memories` | Memory debug |
+| WebSocket | `/ws/chat?token=lyr_...` | Streaming chat (token as query param) |
+
+---
+
+## Files (R2)
+
+| Method | Path | Notes |
+|--------|------|--------|
+| `POST` | `/files/upload` | Multipart upload; client-scoped |
+| `GET` | `/files/browse` | List objects under prefix |
+| `GET` | `/files/download` | Signed or proxied download |
+| `DELETE` | `/files/delete` | Delete object |
+
+Requires R2 env configuration on the server. Errors should indicate misconfiguration vs auth.
+
+---
+
+## Campaigns & performance
+
+| Method | Path | Notes |
+|--------|------|--------|
+| `GET` | `/me/campaigns` | Google Ads campaign list + metrics |
+| `GET` | `/me/campaigns/{campaign_id}/ad-groups` | Drill-down |
+| `GET` | `/me/campaigns/{campaign_id}/keywords` | Drill-down |
+| `GET` | `/me/meta/campaigns` | Meta campaigns when connected |
+
+Account selection and scope behavior are product-specific; see UI and OpenAPI.
+
+---
+
+## Integrations (e.g. WhatsApp demo)
+
+| Method | Path | Notes |
+|--------|------|--------|
+| `GET` | `/me/clients/{client_id}/integrations` | List |
+| `PUT` | `/me/clients/{client_id}/integrations/{provider}` | Upsert encrypted config |
+| `POST` | `/me/clients/{client_id}/integrations/{provider}/test` | Test connection |
+| `POST` | `/me/clients/{client_id}/integrations/whatsapp/demo-message` | Demo send (when configured) |
+| `DELETE` | `/me/clients/{client_id}/integrations/{provider}` | Remove |
+
+---
+
+## Monitoring
+
+| Method | Path | Notes |
+|--------|------|--------|
+| `GET` / `DELETE` / `POST` | `/me/monitoring/webhook` | Configure webhook |
+| `POST` | `/me/monitoring/webhook/test` | Test delivery |
+| `POST` | `/me/monitoring/run-now` | Force monitor run |
+
+---
+
+## Real-time task events
+
+WebSocket:
+
+```text
+wss://api.adros.ai/api/v1/ws/events/{task_id}?token=lyr_YOUR_TOKEN
+```
+
+Auth uses the **same** `lyr_` token as MCP (query param; browsers cannot set Bearer on WS). The server verifies **task ownership** before streaming.
+
+---
+
+## Contract & client state
+
+Still used by orchestration workers and lifecycle tooling:
+
+| Method | Path | Notes |
+|--------|------|--------|
+| `GET` | `/contract/spec` | Single-stage spec |
+| `GET` | `/contract/specs` | List specs |
+| `POST` | `/contract/writeback` | Specialist writeback |
+| `GET` | `/me/clients/{client_id}/state` | Client lifecycle state |
+
+Details: [Contract Layer](/integrations/contract-layer).
+
+---
+
+## Related docs
+
+- [Introduction](/) — product framing and hybrid OS
+- [Quickstart](/quickstart) — MCP + dashboard routes
+- [UI Handoff (2026-04-10)](/integrations/ui-handoff-2026-04-10) — frontend file map
+- [Technical Overview](/integrations/overview) — stack and data model
