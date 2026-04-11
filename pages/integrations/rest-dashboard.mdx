@@ -110,6 +110,19 @@ Account selection and scope behavior are product-specific; see UI and OpenAPI.
 | `POST` | `/me/clients/{client_id}/integrations/whatsapp/demo-message` | Demo send (when configured) |
 | `DELETE` | `/me/clients/{client_id}/integrations/{provider}` | Remove |
 
+### User-scoped provider BYOK
+
+| Method | Path | Notes |
+|--------|------|--------|
+| `GET` | `/me/provider-integrations` | List current user-scoped provider secrets (masked) |
+| `PUT` | `/me/provider-integrations/{provider}` | Upsert encrypted user-scoped provider secret |
+| `POST` | `/me/provider-integrations/{provider}/test` | Test user-scoped provider connection |
+| `DELETE` | `/me/provider-integrations/{provider}` | Revoke provider secret |
+| `POST` | `/me/research/perplexity/search` | Dedicated metered Perplexity research route |
+
+Dashboard note:
+- `client/src/pages/ApiKeys.tsx` now exposes a user-facing panel for Anthropic, OpenAI, Perplexity, and DataForSEO BYOK secret management/testing.
+
 ---
 
 ## Monitoring

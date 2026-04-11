@@ -7,7 +7,7 @@ description: Architecture, data model, and stack for Adros — the hybrid market
 
 > **Audience:** Engineers integrating with Adros (MCP, REST, or webhooks), or anyone who needs a precise picture of how components fit together.
 >
-> **Last repo verification:** 2026-04-11, reading from `c:\Cursor Projects\Adros\adros` + `adros-app`
+> **Last repo verification:** 2026-04-12, reading from `c:\Cursor Projects\Adros\adros` + `adros-app`
 >
 > **Companion docs:**
 > - [REST — Dashboard & Orchestration](/integrations/rest-dashboard) — topic index of task/workspace/file/campaign REST + task WebSocket
@@ -22,7 +22,7 @@ description: Architecture, data model, and stack for Adros — the hybrid market
 **Adros is a hybrid marketing OS:** the same FastAPI + Postgres + MCP backend powers **operator-grade dashboard workflows** and **AI agent integration**.
 
 - **Marketing brain:** 4,022-pattern database, memory layer, creative pipeline, daily autonomous monitor. Managed Agents and MCP clients call Adros to "think like marketers" and act on Meta/Google through wrapped tools.
-- **Research stack direction:** Perplexity + DataForSEO + Firecrawl + platform-native Meta/Google data. Firecrawl/DataForSEO are already reflected strongly in the current repo/runtime; verify the deployed Perplexity provider path separately before claiming full native support on a specific environment.
+- **Research stack direction:** Perplexity + DataForSEO + Firecrawl + platform-native Meta/Google data. Firecrawl/DataForSEO are already reflected strongly in the current repo/runtime. Perplexity now has user-level BYOK routes, a dedicated metered research route, and API Keys page controls for secret management/testing; broader research-workflow wiring should still be verified before claiming fully native end-to-end support on a specific environment.
 - **Orchestration surfaces:** [app.adros.ai](https://app.adros.ai) includes **Command Center** (client-scoped task inbox, live event timeline, approvals, blockers, comments → follow-up tasks), **Strategy Workspace** (staged strategy/creative artifacts, canonical masters, deploy request), **Files** (R2-backed, scoped storage), **Campaigns** (live metrics when accounts connected), **Adros CEO** (coordination → routed work).
 - **Tasks and events are the system of record** — whether the trigger came from the UI, CEO chat, or MCP.
 
