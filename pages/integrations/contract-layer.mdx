@@ -39,6 +39,8 @@ Migration file: `api/db/migrations/021_client_lifecycle_state.sql`
 
 REST is for your Python workers (admin-worker, data-analyst-worker). MCP is for LLM agents (Jarvis, Hermes, Creative Director) calling Adros via natural language.
 
+**Dashboard & orchestration REST:** The Contract endpoints above define **deliverable specs** and lifecycle **writeback**. Task inbox, event timelines, approvals, Strategy Workspace (snapshots, masters, stage review), Files, and deploy handoff use **additional** routes on the same `/api/v1` base — see [REST — Dashboard & Orchestration](/integrations/rest-dashboard).
+
 ---
 
 ## Auth (same as existing Adros endpoints)
