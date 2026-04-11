@@ -10,7 +10,9 @@
 
 ## 1. What Adros is (one paragraph)
 
-Adros AI is a marketing automation backend (FastAPI on Railway, React frontend on Vercel, Supabase Postgres). It holds 4,022 enriched ad patterns, runs daily autonomous monitoring (6 checks at 8am SGT), and exposes an MCP server that specialists (Creative Director, Data Analyst, Hermes) use as their **strategy brain, memory, and optimization engine**. Adros is where the intelligence lives. The orchestration layer (Paperclip, OpenClaw, or custom) is where the *coordination* lives. The orchestration layer owns routing; Adros owns marketing cognition.
+Adros is a **hybrid marketing OS**: FastAPI on Railway, React dashboard on Vercel, Supabase Postgres, Cloudflare R2 for scoped files, plus MCP (Streamable HTTP). It holds **4,022** enriched patterns, memory, creative generation, daily autonomous monitoring (6 checks; webhook to your URL), and **first-class operator workflows** on [app.adros.ai](https://app.adros.ai): **Command Center** (tasks, event timeline, approvals, blockers, comments/follow-ups), **Strategy Workspace** (staged artifacts, masters, deploy handoff), **Files**, **Campaigns**, and **Adros CEO** (routing into tracked work). **Tasks and events are the system of record** whether work starts in the UI or via MCP.
+
+If you run **Paperclip, OpenClaw, Jarvis, or custom** conductors on top, they still make sense: Adros remains the **marketing capability + data plane**; your layer can own *cross-tool* sequencing, human assignment, or policies Adros does not encode. You are not required to use an external orchestrator to get coordination—native dashboards cover much of it— but many enterprise setups still want both.
 
 ---
 

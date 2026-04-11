@@ -17,6 +17,22 @@ Get Adros running in your AI tool in **under 3 minutes**. Same Adros brain, any 
 
 ---
 
+## Dashboard first (optional)
+
+If you are an operator, you do not have to start from MCP. After sign-in, use the same account and token model:
+
+| Area | Route (on [app.adros.ai](https://app.adros.ai)) | Purpose |
+|---|---|---|
+| Command Center | `/command-center` or `/dashboard` | Client-scoped task inbox, timeline, approvals |
+| Strategy Workspace | `/workspace` | Stages, artifacts, masters, deploy request |
+| Files | `/files` | R2-backed uploads and browse |
+| Campaigns | `/campaigns` | Google/Meta performance when accounts are connected |
+| CEO | `/ceo` | Coordination chat and routed work |
+
+REST APIs for these surfaces live under `https://api.adros.ai/api/v1/*` — see [OpenAPI](https://api.adros.ai/docs) and [Technical Overview](/integrations/overview). Behavior may lag latest `main` until your deployment catches up.
+
+---
+
 ## Claude Desktop
 
 The fastest path — Claude Desktop natively supports MCP over Streamable HTTP.
