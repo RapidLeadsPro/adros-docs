@@ -1,38 +1,37 @@
 ---
 title: Technical Overview
-description: Architecture, data model, and stack for Adros — the hybrid marketing OS.
+description: Architecture, data model, and stack for Adros - the hybrid marketing OS.
 ---
 
 # Technical Overview
 
-> **Audience:** Engineers integrating with Adros (MCP, REST, or webhooks), or anyone who needs a precise picture of how components fit together.
->
-> **Last repo verification:** 2026-04-12, reading from `c:\Cursor Projects\Adros\adros` + `adros-app`
+> **Audience:** Engineers integrating with Adros through MCP, REST, webhooks, or the dashboard.
 >
 > **Companion docs:**
-> - [REST — Dashboard & Orchestration](/integrations/rest-dashboard) — topic index of task/workspace/file/campaign REST + task WebSocket
-> - [Dashboard & frontend integration](/integrations/ui-handoff-2026-04-10) — key routes, API expectations, and `adros-app` file map
-> - [Contract Layer](/integrations/contract-layer) — deterministic deliverable specs for lifecycle stages
-> - [Integration Notes](/integrations/integration-notes) — integration patterns and common pitfalls
+> - [REST - Dashboard & Orchestration](/integrations/rest-dashboard)
+> - [Dashboard & frontend integration](/integrations/ui-handoff-2026-04-10)
+> - [Contract Layer](/integrations/contract-layer)
+> - [Integration Notes](/integrations/integration-notes)
 
 ---
 
 ## 1. What Adros is
 
-**Adros is a hybrid marketing OS:** the same FastAPI + Postgres + MCP backend powers **operator-grade dashboard workflows** and **AI agent integration**.
+Adros is a **hybrid marketing OS**: the same FastAPI + Postgres + MCP backend powers both **operator-grade dashboard workflows** and **AI agent integration**.
 
-- **Marketing brain:** 4,022-pattern database, memory layer, creative pipeline, daily autonomous monitor. Managed Agents and MCP clients call Adros to "think like marketers" and act on Meta/Google through wrapped tools.
-- **Research stack direction:** Perplexity + DataForSEO + Firecrawl + platform-native Meta/Google data. Firecrawl/DataForSEO are already reflected strongly in the current repo/runtime. Perplexity now has user-level BYOK routes, a dedicated metered research route, and API Keys page controls for secret management/testing; broader research-workflow wiring should still be verified before claiming fully native end-to-end support on a specific environment.
-- **Orchestration surfaces:** [app.adros.ai](https://app.adros.ai) includes **Command Center** (client-scoped task inbox, live event timeline, approvals, blockers, comments → follow-up tasks), **Strategy Workspace** (staged strategy/creative artifacts, canonical masters, deploy request), **Files** (R2-backed, scoped storage), **Campaigns** (live metrics when accounts connected), **Adros CEO** (coordination → routed work).
-- **Tasks and events are the system of record** — whether the trigger came from the UI, CEO chat, or MCP.
+- **Marketing brain:** pattern database, memory layer, creative pipeline, daily monitoring, and managed specialist workflows
+- **Research stack direction:** Perplexity + DataForSEO + Firecrawl + platform-native Meta/Google data
+- **Operator surfaces:** [app.adros.ai](https://app.adros.ai) includes **Command Center**, **Strategy Workspace**, **Files**, **Campaigns**, and **Adros CEO**
+- **Tasks and events are the system of record** whether work starts in the UI, CEO chat, or MCP
 
-**Runtime actors (April 2026):**
+### Runtime actors (April 2026)
 
 | Actor | ID | Role |
 |-------|-----|------|
 | **Adros CEO** | `adros_ceo` | Conversational coordinator; intake; routes work into tracked tasks |
-| **Adros CMO** | `adros_cmo` | Managed Agent — audits, research synthesis, structure/strategy, optimization analysis |
-| **Adros CD** | `adros_cd` | Copy + creative direction (target: full Managed Agent) |
+| **Adros Research** | `adros_research` | Managed Agent - keyword research, market research, competitor research, and audience research |
+| **Adros CMO** | `adros_cmo` | Managed Agent - audits, strategy synthesis, structure/strategy, and optimization analysis |
+| **Adros CD** | `adros_cd` | Copy and creative direction |
 | **Adros Deployer** | `adros_deployer` | Launch and account change execution |
 
 ---
@@ -41,15 +40,14 @@ description: Architecture, data model, and stack for Adros — the hybrid market
 
 | Layer | Tech |
 |-------|------|
-| **Backend** | FastAPI 0.3.0 on Railway (`api.adros.ai`) |
-| **Database** | Postgres via Supabase (migrations numbered `001`–`025+`) |
-| **File storage** | **Cloudflare R2** (S3-compatible; client-scoped keys) — primary object store for dashboard Files + audit artifacts |
+| **Backend** | FastAPI on Railway (`api.adros.ai`) |
+| **Database** | Postgres via Supabase |
+| **File storage** | Cloudflare R2 |
 | **Frontend** | React + Vite on Vercel (`app.adros.ai`) |
-| **MCP server** | Streamable HTTP at `/mcp`, spec `2025-03-26` |
-| **Auth** | JWT (`lyr_...` tokens); same token for MCP and REST |
-| **Vector search** | Qdrant (pattern similarity, memory recall) |
-| **Creative generation** | External image generators (Gemini path etc.) proxied through Adros |
-| **Notifications** | Resend (email), WhatsApp (BYOK demo path) |
+| **MCP server** | Streamable HTTP at `/mcp` |
+| **Auth** | JWT (`lyr_...`) |
+| **Vector search** | Qdrant |
+| **Notifications** | Resend, WhatsApp demo/BYOK paths |
 
 ---
 
@@ -57,201 +55,138 @@ description: Architecture, data model, and stack for Adros — the hybrid market
 
 ### Users & multi-tenancy
 
-- `users` — Supabase `auth.users` + Adros `public.users` profile
-- `clients` — each user can have multiple clients; solo mode uses `client_id = NULL`
-- **All data scoped** by `(user_id, client_id)` where applicable
-- `client_lifecycle_state` — tracks where each client is in their journey (intake → research → creative → approved → live → optimizing)
-- `client_integrations` — BYOK secrets (Cometly, WhatsApp, etc.) encrypted at rest via Fernet
+- `users`
+- `clients`
+- `client_lifecycle_state`
+- `client_integrations`
+- Data is scoped by `user_id` and, where applicable, `client_id`
 
 ### Tasks & orchestration
 
-- `tasks` — the unit of work; has status, specialist/agent, cost, project
-- `task_events` — append-only timeline: tool calls, model steps, guardrails, approvals, blockers
-- `task_comments` — discussion; can optionally spawn a linked follow-up task
-- `task_blockers` — structured human-required items (billing, permissions, policy)
-- `projects` — grouping; each client typically has one active project
-- **WebSocket** at `/ws/events/{task_id}?token=lyr_...` for real-time event streaming
+- `tasks` - unit of work with status, specialist/agent, cost, and project linkage
+- `task_events` - append-only timeline
+- `task_comments` - discussion, with optional follow-up task creation
+- `task_blockers` - human-required blockers
+- `projects` - grouping layer
+- WebSocket at `/ws/events/{task_id}?token=lyr_...`
 
 ### Strategy & artifacts
 
-- Workspace stages: research → economics → structure → copy/creative → audit → deploy
-- **Masters:** each stage can have a canonical "master" artifact (the current operating spec)
-- **Snapshots:** workspace state serialized to R2 for audit trail
-- **Deploy request:** creates an `adros_deployer` task with manifest context
+- Workspace stages from research through deploy
+- Stage masters
+- Snapshots
+- Deploy requests
 
 ### Patterns & memory
 
-- `patterns` — 4,022 enriched ad patterns with `enrichment_metadata` + `image_generation_prompt`
-- `memory_store` — business_context, personas, weekly_logs scoped by `(user_id, client_id)`
-- Vector search via Qdrant for pattern similarity and memory recall
+- `patterns`
+- `memory_store` for business context, personas, and weekly logs
 
 ### Monitoring
 
-- `monitoring_configs` — per-user webhook URL for daily monitor output
-- Daily run at 8am SGT: 6 checks, HMAC-signed POST to webhook
-- Monitor issues include `recommended_specialist` (runtime actor ID) for routing
+- `monitoring_configs`
+- Daily run at 8am SGT
+- Issues include `recommended_specialist` for routing
 
 ---
 
 ## 4. MCP server
 
-- **74 tools** exposed at `https://api.adros.ai/mcp`
-- **Transport:** Streamable HTTP (spec `2025-03-26`)
-- **Auth:** `X-User-Token: lyr_...` header
-- Tool categories: pattern search, creative generation, campaign actions, memory, monitoring, contract specs, workspace, files, orchestrator tasks
-- All tools use the same auth + scoping as REST — no separate permission model
+- Exposed at `https://api.adros.ai/mcp`
+- Streamable HTTP transport
+- `X-User-Token: lyr_...` auth
+- Tool categories include patterns, creative generation, campaign actions, memory, monitoring, contracts, workspace, files, and orchestrator tasks
 
 ---
 
 ## 5. REST API
 
-- **Base:** `https://api.adros.ai/api/v1`
-- **Auth:** `Authorization: Bearer lyr_...`
-- **OpenAPI:** [api.adros.ai/docs](https://api.adros.ai/docs) — always trust this over docs if they diverge
-- **Key route groups:** orchestrator (tasks/events/approve/reject/comments/blockers), workspace (summary/snapshot/master/review), chat, files, campaigns, monitoring, contract, integrations
-- **→ Full topic index:** [REST — Dashboard & Orchestration](/integrations/rest-dashboard)
+- Base: `https://api.adros.ai/api/v1`
+- Auth: `Authorization: Bearer lyr_...`
+- Live schemas: [api.adros.ai/docs](https://api.adros.ai/docs)
+- Major route groups: orchestrator, workspace, chat, files, campaigns, monitoring, contracts, integrations
 
 ---
 
-## 6. Webhooks (monitor output)
+## 6. Webhooks
 
-When configured (`POST /me/monitoring/webhook`), Adros POSTs monitor results daily at 8am SGT.
+When configured, Adros POSTs monitor results daily.
 
-**Payload structure (v1.1):**
-
-```json
-{
-  "version": "1.1",
-  "timestamp": "2026-04-11T00:00:00Z",
-  "user_id": "...",
-  "summary": { "total_issues": 3, "critical": 1, "warning": 2 },
-  "issues": [
-    {
-      "alert_type": "creative_fatigue",
-      "severity": "critical",
-      "headline": "Ad frequency > 5 on 3 Meta ads",
-      "summary": "...",
-      "action": "Refresh creatives",
-      "recommended_specialist": "adros_cd",
-      "dedupe_key": "creative_fatigue|client_name|headline"
-    }
-  ]
-}
-```
-
-**Signature:** `X-Adros-Signature: sha256=<hex>` — HMAC-SHA256 of `sort_keys=True` JSON body using your webhook secret.
-
-**Deduping:** Same alert type + same client + same headline = same `dedupe_key`. Use this as the authoritative dedupe identifier.
-
-**No retries** on delivery failure — design your receiver accordingly.
+Public webhook expectations:
+- HMAC-signed payloads via `X-Adros-Signature`
+- `dedupe_key` for consumer-side deduping
+- no retry guarantee
 
 ---
 
 ## 7. Contract layer
 
-Deterministic deliverable specs keyed by `(stage, task_type)`. Each spec defines:
+Contracts are keyed by `(stage, task_type)` and define:
 
-- `produce` — what artifacts the specialist must deliver
-- `accept` — what the specialist consumes
-- `recommended_specialist` — runtime actor ID (`adros_ceo`, `adros_cmo`, `adros_cd`, `adros_deployer`)
-- `review_gates` — human checkpoints
-- `next_stage` — where to go after completion
+- `produce`
+- `accept`
+- `recommended_specialist`
+- `review_gates`
+- `next_stage`
 
-**→ Full spec table:** [Contract Layer](/integrations/contract-layer)
+`recommended_specialist` is a runtime actor ID such as `adros_ceo`, `adros_research`, `adros_cmo`, `adros_cd`, or `adros_deployer`.
 
 ---
 
 ## 8. Quality track (audits)
 
-When enabled (`AUDIT_QUALITY_TRACK_ENABLED` env var + migration `025_audit_quality_track`):
+When enabled:
 
-- **Scorecards** on completed audit tasks
-- **Guardrails** for audit quality thresholds
-- **Artifact persistence** — markdown, JSON, PDF paths stored on R2
-- **Audit trends** per project
+- scorecards on completed audit tasks
+- guardrails for audit quality thresholds
+- artifact persistence
+- audit trends per project
 
-Confirm on your deployment before advertising to end users.
+Confirm support on the environment you are documenting before presenting it as live.
 
 ---
 
 ## 9. Creative pipeline
 
-- Always runs with `mode='bold'` + `nano_banana_pro` generator
-- 60-second idempotency window + 20/hr rate limit
-- Pattern blueprints anchor generation (style, composition, copy framework)
-- Product guardrails applied before delivery
-- Output lands in task artifacts + R2
+- Pattern-anchored generation
+- idempotency protections
+- rate limits
+- output persisted into task artifacts and storage
 
 ---
 
-## 10. Daily autonomous monitor — 6 checks
+## 10. Daily autonomous monitor
 
-| # | Check | Platform | What it looks for |
-|---|-------|----------|-------------------|
-| 1 | **Session health** | Adros | Missing business context, personas, or recent weekly logs |
-| 2 | **Creative fatigue** | Meta | Ad frequency > threshold; flags stale creatives |
-| 3 | **Search term waste** | Google | High-spend, low-conversion search terms; quality score issues |
-| 4 | **RSA health** | Google | Responsive search ads below "good" strength |
-| 5 | **Conversion health** | Google | Conversion tracking status and score |
-| 6 | **Advantage+ audit** | Meta | Campaign configuration issues |
+Current product framing includes six major checks:
 
-Each issue includes `recommended_specialist` (runtime actor ID) for routing into tasks.
+1. Session health
+2. Creative fatigue
+3. Search term waste
+4. RSA health
+5. Conversion health
+6. Advantage+ audit
 
 ---
 
 ## 11. Common integration pitfalls
 
-1. **Task ownership** — always verify the caller owns the task (user_id match) before mutating; the service layer relies on callers to enforce this in some paths
-2. **Event ordering** — task events should be queried `ORDER BY created_at DESC` for "latest" feeds; confirm the endpoint you're using does this
-3. **R2 env** — file upload endpoints require R2 credentials configured on the server; errors surface as config issues, not auth
-4. **Quality track** — scorecard/guardrail endpoints return empty until migration + env flag are both live
-5. **Campaign scope** — Google/Meta campaign data depends on user's connected accounts and scope selection; fallback behavior is surfaced in the UI
-6. **WS auth** — WebSocket connections use token as query param (browsers cannot set Bearer header on WS); task ownership is verified server-side before streaming
-7. **Monitor retries** — there are none; design your webhook receiver to be resilient
-8. **Contract `recommended_specialist`** — values are runtime actor IDs (`adros_*`), not display names; legacy values like "Hermes" or "Data Analyst" are retired
-9. **Bearer case** — use `Authorization: Bearer lyr_...` (capital B); some routes may be case-sensitive
+1. Always verify task ownership before mutating task state.
+2. Do not assume file upload alone means task completion.
+3. R2-backed file routes require the target environment to be configured correctly.
+4. Scorecard/guardrail endpoints depend on both code and environment support.
+5. Campaign data depends on connected-account scope.
+6. WebSocket auth uses the token query param.
+7. Webhook receivers should be resilient and idempotent.
+8. `recommended_specialist` uses runtime actor IDs, not display names.
 
 ---
 
-## 12. File storage — Cloudflare R2
+## 12. TL;DR
 
-- **S3-compatible** API, client-scoped prefixes
-- Primary store for: dashboard Files uploads, workspace snapshots, audit artifacts
-- Env required: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, bucket config
-- Files routes: upload, browse, download, delete — see [REST — Dashboard](/integrations/rest-dashboard#files-r2)
-
----
-
-## 13. Memory layer
-
-- `business_context` — brand positioning, goals, constraints
-- `personas` — target audience profiles
-- `weekly_logs` — append-only weekly action summaries
-- Scoped by `(user_id, client_id)`; `client_id = NULL` for solo mode
-- Used by Managed Agents for context-rich decision making
-
----
-
-## 14. Security model
-
-- All routes require valid JWT (`lyr_...` token)
-- Multi-tenant scoping enforced at query level (user_id + optional client_id)
-- Client integration secrets encrypted at rest (Fernet)
-- File access scoped to owning user/client
-- MCP and REST use the same auth — no separate permission model
-- Cross-tenant access should be verified at the service layer for any new routes
-
----
-
-## 15. TL;DR (if you read nothing else)
-
-- **Adros = hybrid marketing OS:** deterministic rails (tasks, events, files, scoped integrations) + Managed Agent depth (CMO for audits/strategy, CD for creative) + operator dashboard (Command Center, Workspace, Campaigns, CEO)
-- **Backend:** FastAPI 0.3.0 on Railway at `api.adros.ai`. Postgres via Supabase. Files on R2.
-- **MCP:** ~74 tools at `/mcp`, Streamable HTTP, auth via `X-User-Token`.
-- **REST:** all under `/api/v1/*`, JWT auth.
-- **Runtime actors:** `adros_ceo`, `adros_cmo`, `adros_cd`, `adros_deployer` — not legacy names.
-- **9 workflow playbooks** in `api/services/workflow_guides.py`.
-- **Daily monitor** runs 8am SGT, 6 checks, HMAC-signed webhook. No retries.
-- **Quality track:** audit scorecards/guardrails — confirm env flag + migration on your deployment.
-- **Pattern moat:** 4,022 patterns with enrichment metadata.
-- **Artifact canon:** versioned analysis, mastered specs, traceable from strategy through deploy.
+- **Adros = hybrid marketing OS:** deterministic rails + managed specialist depth + operator dashboard
+- **Runtime actors:** `adros_ceo`, `adros_research`, `adros_cmo`, `adros_cd`, `adros_deployer`
+- **MCP:** Streamable HTTP at `/mcp`
+- **REST:** all under `/api/v1/*`
+- **Pattern moat:** 4,022 patterns
+- **Quality track:** audit-only and deployment-dependent
+- **Artifacts:** versioned, reviewable, and traceable across strategy through deploy

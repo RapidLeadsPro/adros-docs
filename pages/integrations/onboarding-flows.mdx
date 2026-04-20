@@ -1,406 +1,159 @@
-# Client Onboarding Flows — Fresh vs Existing Ad Account
+# Client Onboarding Flows - Fresh vs Existing Ad Account
 
-**Audience:** Engineers designing client onboarding flows on top of Adros
-**Author:** Adros team
-**Purpose:** Define the two onboarding journeys so an orchestration layer knows exactly who to trigger, in what order, with what handoff artifacts. Both journeys share the same backbone — only the starting phase differs.
+**Audience:** Engineers designing onboarding flows on top of Adros  
+**Purpose:** Define the two common onboarding journeys so an orchestration layer knows who to trigger, in what order, and with what handoff artifacts.
 
-> **Pattern (external stack):** the operator may work through an **optional** orchestration layer (OpenClaw, a custom MCP host, or another proprietary conductor). That layer routes; Adros is the marketing brain and execution plane. **Research lanes** (for example an external LLM research API, web crawl via **Firecrawl** or similar, and other MCP-capable tools you choose) feed findings back; the conductor’s own task tracker holds cross-tool state when you use one.
+> **Pattern (external stack):** the operator may work through an optional orchestration layer. That layer routes; Adros remains the marketing brain and execution plane.
 >
-> **Pattern (native Adros):** the operator uses **Adros CEO + Command Center**; routing and tasks still land on the same backend — there is no requirement for an external orchestration layer. See [Terminology (April 2026)](#terminology-april-2026) below.
-
-> **Research stack truth:** product direction is **Perplexity + DataForSEO + Firecrawl + platform-native data**. Firecrawl/DataForSEO are already strongly represented in the current repo/runtime; verify the exact deployed Perplexity provider path before documenting a specific environment as fully live-native.
-
-> **See also (native Adros):** Operators can also run the same backbone through **Command Center** and **Strategy Workspace** on [app.adros.ai](https://app.adros.ai), with tasks, approvals, workspace masters, and files on the same backend. REST routes for those surfaces are indexed in [REST — Dashboard & Orchestration](/integrations/rest-dashboard). For how that coexists with external conductors, read [Integration Notes — §1](/integrations/integration-notes).
+> **Pattern (native Adros):** the operator uses **Adros CEO + Command Center** and the same backend handles the tracked work.
 
 ## Terminology (April 2026)
 
-Older versions of this doc named the external orchestrator **Jarvis** and the deploy role **Hermes**. The live product uses **runtime actor IDs** (below); **Hermes** is not a current agent name.
+Older versions of this doc referenced legacy names such as **Jarvis** or **Hermes**. Public docs should use the runtime actor IDs below.
 
 | Actor | ID | Role (summary) |
 |-------|-----|----------------|
 | **Adros CEO** | `adros_ceo` | Conversational coordinator; intake; routes work into tasks |
-| **Adros CMO** | `adros_cmo` | Managed Agent — audits, research synthesis, structure/strategy, optimization analysis |
-| **Adros CD** | `adros_cd` | Copy + creative direction (target: full Managed Agent) |
+| **Adros Research** | `adros_research` | Managed Agent - keyword research, market research, competitor research, and audience research |
+| **Adros CMO** | `adros_cmo` | Managed Agent - audits, strategy synthesis, structure/strategy, and optimization analysis |
+| **Adros CD** | `adros_cd` | Copy and creative direction |
 | **Adros Deployer** | `adros_deployer` | Launch and account change execution |
 
-**Adros Deployer** (`adros_deployer`) is the real deploy/launch owner. There is **no** legacy **Hermes** runtime and **no** standalone **Data Analyst** agent — research/audit/analysis maps to **CMO** (and deterministic tools), creative to **CD**, go-live to **Deployer**.
-
-Below, **Conductor** means an **optional external** orchestration stack (for example OpenClaw or a custom conductor you control). Native Adros often replaces that with **CEO + Command Center** without a conductor.
+There is no public standalone "Data Analyst" runtime. Research maps to **Adros Research**, audits and strategy map to **Adros CMO**, creative maps to **Adros CD**, and go-live maps to **Adros Deployer**.
 
 ---
 
-## 1. The shared backbone
+## 1. Shared backbone
 
-Every client onboarding — fresh or existing — follows this 8-step backbone. What changes between journeys is **which steps are skipped, which are audit-based vs build-based, and where Conductor enters the loop**.
+Every client onboarding follows the same high-level backbone:
 
-```
-[1] INTAKE        → who/what/where (business + goals + constraints)
-[2] RESEARCH      → market, competitors, personas, keywords
-[3] ANALYSIS      → for existing: audit data. for fresh: opportunity map
-[4] STRUCTURE     → campaigns/ad sets/budgets
-[5] CREATIVE      → copy + visuals (pattern-matched via Adros)
-[6] APPROVAL      → Operator reviews, Conductor relays
-[7] LAUNCH        → Adros Deployer deploys to platforms
-[8] MONITOR       → daily Adros webhook → Conductor → specialist loop
-```
+1. **Intake** - who/what/where (business, goals, constraints)
+2. **Research** - market, competitors, personas, keywords
+3. **Analysis** - opportunity mapping or audit findings
+4. **Structure** - campaigns, ad sets, budgets
+5. **Creative** - copy and visuals
+6. **Approval** - operator reviews and approves
+7. **Launch / Execute** - deployment or account changes
+8. **Monitor** - ongoing alerts and follow-up work
 
-Adros already has **8 workflow guides** encoding this backbone (see `adros/api/services/workflow_guides.py`). Conductor doesn't need to reinvent it — Conductor just calls `get_workflow_guide(type)` at the right moment and routes work accordingly.
+Adros exposes **9 workflow guides** that help orchestrators route these phases correctly.
 
 ---
 
-## 2. Journey A — FRESH CLIENT (no ad account, no history)
+## 2. Journey A - fresh client (no ad account, no history)
 
-**Trigger signals the operator gives Conductor:**
-- "new client, just signed — here's their website"
-- "onboard XYZ company"
-- "client is starting from scratch, no ads yet"
+**Typical trigger signals:**
 
-### Flow
+- "new client, just signed"
+- "onboard [client]"
+- "starting from scratch, no ads yet"
 
-```
-Operator ──► Conductor
-         │
-         │ (1) creates a tracked parent item "Onboard [client]"
-         │     with subtasks linked to each phase
-         │
-         ├──► [INTAKE] Conductor itself
-         │    - asks the operator 5 questions (or pulls from chat history if already given)
-         │    - website, niche, offer, budget range, goals
-         │
-         ├──► [RESEARCH] Research lane (e.g. external LLM research API + crawl tools)
-         │    Task: "Full onboarding research for [client]"
-         │    Brief from Adros:
-         │      - use saved intake + business context if already captured
-         │      - call `build_brand_profile(url)` when website extraction helps
-         │      - call `get_intake_questions(...)` when business context is still thin
-         │    NOTE: there is no dedicated `/me/onboarding/brief` endpoint today
-         │    Deliverables:
-         │      - website crawl (about, pricing, offer, tone)
-         │      - top 5 competitor teardown
-         │      - market/category snapshot
-         │      - persona drafts (3-4)
-         │      - brand extraction (colors/fonts/logo)
-         │    Returns: structured JSON + optional draft PDF brief
-         │
-         ├──► [INGEST] Adros (Adros CMO)
-         │    Call path:
-         │      - build_brand_profile(url) if research output missing brand bits
-         │      - save_business_context(business_name, website, USP, ...)
-         │      - save_persona(...) for each persona from research JSON
-         │      - upload_brand_asset(...) for logo/colors
-         │
-         ├──► [ANALYSIS] Adros (Adros CMO)
-         │    Workflow: keyword_research OR market_research
-         │    Output: [BusinessName]_Keyword_Research.xlsx or Market_Research.xlsx
-         │
-         ├──► [STRUCTURE] Adros CMO (structure planning; Adros Deployer executes approved changes)
-         │    Workflow: meta_campaign_build OR google_campaign_build
-         │    Output: [BusinessName]_Meta_Ads_Structure.xlsx (6 tabs)
-         │            [BusinessName]_Google_Ads_Structure.xlsx
-         │    NOTE: structure only — no copy, no images yet
-         │
-         ├──► [CREATIVE] Adros (Adros CD)
-         │    Workflow: creative_only
-         │    Tools: match_strategy → get_blueprint → build_creative_prompt
-         │           → generate_creative (mode='bold', nano_banana_pro)
-         │    Output: [BusinessName]_Meta_Ads_Copy.xlsx + images in DAM
-         │
-         ├──► [APPROVAL] Conductor → Operator
-         │    Package: structure + copy + sample creatives
-         │    Operator approves / edits / rejects in the chosen client channel
-         │    (for example WhatsApp, email, or native Adros surfaces)
-         │
-         ├──► [LAUNCH] Adros Deployer specialist
-         │    Requires: client's ad account connected to Adros
-         │    Tools: create_campaign, create_ad_set, create_ad, create_ad_creative
-         │    (If ad account not ready: Conductor pauses, notifies operator,
-         │     creates "connect ad account" task for client onboarding)
-         │    Current native deploy truth: live apply is still a bounded v1 scope.
-         │    Status changes, budget changes, keywords, negatives, and some asset-link
-         │    actions are strongest today; asset upload and broader mutations may return
-         │    a blocker instead of executing automatically.
-         │
-         └──► [MONITOR] Adros daily webhook (8am SGT)
-              Starts delivering alerts → Conductor → routes per alert type
-```
+### Recommended flow
+
+1. **Intake** - collect website, offer, budget range, goals, constraints
+2. **Research lane** - external research bridge or native research support gathers competitor, audience, and market inputs
+3. **Ingest** - **Adros Research** stores business context, personas, and brand context
+4. **Research deliverables** - **Adros Research** produces keyword research and market research deliverables as needed
+5. **Structure** - **Adros CMO** produces Meta/Google structure deliverables
+6. **Creative** - **Adros CD** produces copy and creative outputs
+7. **Approval** - operator reviews package
+8. **Launch** - **Adros Deployer** applies approved changes
+9. **Monitor** - ongoing monitoring begins or continues
 
 ### Who does what (Fresh)
 
 | Phase | Specialist | Tool/System | Artifact |
 |---|---|---|---|
-| Intake | Conductor (direct) | Operator channel + conductor task tracker | Intake notes on issue |
-| Research | **Research bridge** (external LLM research API / Firecrawl / your stack) | Web crawl + synthesis | Research JSON + optional PDF |
-| Ingest | Adros CMO | `save_business_context`, `save_persona`, `build_brand_profile` | Populated Adros DB |
-| Keyword/Market research | Adros CMO | `research_keywords`, `competitor_gap`, etc. | `.xlsx` research file |
-| Structure | Adros CMO | `meta_campaign_build` / `google_campaign_build` workflow | `.xlsx` structure file |
-| Creative | Adros CD | `match_strategy` → `build_creative_prompt` → `generate_creative` | `.xlsx` copy + images |
-| Approval | Conductor | Conductor task tracker + client communication channel | Operator's decision |
-| Launch | Adros (Adros Deployer) | MCP write tools (create_campaign, etc.) | Live campaigns |
-| Monitor | Adros cron + webhook | Daily monitor → Conductor receiver | Webhook alerts |
+| Intake | Conductor or Adros CEO | Operator channel | Intake notes |
+| Research | Research bridge and/or Adros Research | Research workflows | Research inputs |
+| Ingest | Adros Research | Memory + brand tools | Populated Adros context |
+| Research deliverables | Adros Research | Keyword/market research workflows | Research package |
+| Structure | Adros CMO | Campaign-build workflows | Structure deliverables |
+| Creative | Adros CD | Creative workflows | Copy + creative outputs |
+| Approval | Operator | Command Center or external approval channel | Decision |
+| Launch | Adros Deployer | Deployment tools | Live campaigns |
+| Monitor | Adros | Daily monitoring loop | Alerts |
 
 ---
 
-## 3. Journey B — EXISTING AD ACCOUNT (already running ads)
+## 3. Journey B - existing ad account (already running ads)
 
-**Trigger signals the operator gives Conductor:**
-- "new client, they already have Meta ads running, audit them"
-- "take over [client]'s Google Ads account"
-- "audit + optimize existing ad account"
+**Typical trigger signals:**
 
-### Flow
+- "audit this account"
+- "take over [client]'s ads"
+- "optimize existing campaigns"
 
-```
-Operator ──► Conductor
-         │
-         │ (1) creates a tracked parent item "Onboard + Audit [client]"
-         │
-         ├──► [INTAKE] Conductor itself
-         │    Minimal: business name, ad account ID, main concern,
-         │    target CPA/ROAS
-         │
-         ├──► [CONNECT] Adros (admin step)
-         │    Client grants access to Meta/Google ad account
-         │    (One-time OAuth flow through Adros dashboard)
-         │    Conductor waits for "connected" signal before proceeding
-         │
-         ├──► [ANALYSIS] Adros (Adros CMO) ◄── KEY DIFFERENCE
-         │    Workflow: meta_audit OR google_audit
-         │    Tools:
-         │      - list_ad_accounts, read_ad_account
-         │      - list_campaigns, list_ad_sets, list_ads
-         │      - list_insights (30d, 7d, breakdowns)
-         │      - audit_landing_page
-         │    Output: [BusinessName]_Meta_Ads_Audit.xlsx (8 tabs)
-         │            Health score, top wins, top issues
-         │
-         ├──► [RESEARCH] Research lane — CONDITIONAL
-         │    Only if audit reveals gaps:
-         │      - weak competitive differentiation
-         │      - missing persona understanding
-         │      - unexplored angles
-         │    external LLM research / crawl-backed synthesis for competitor + persona refresh
-         │    (Skip if Adros audit already has enough context)
-         │
-         ├──► [INGEST] Adros CMO
-         │    Backfill business_context + personas from:
-         │      - audit data (what's working = real personas)
-         │      - supplemental research JSON (if run)
-         │      - build_brand_profile(url) for brand assets
-         │
-         ├──► [STRUCTURE/FIXES] Adros (Adros Deployer) ◄── DIFFERENT SHAPE
-         │    Not a full build — a REALLOCATION PLAN:
-         │      - pause wasters (low ROAS campaigns)
-         │      - reallocate budget to winners
-         │      - add missing exclusions
-         │      - propose new ad sets for untapped audiences
-         │    Output: audit .xlsx already contains this (Tab: Budget Reallocation)
-         │
-         ├──► [CREATIVE] Adros CD — CONDITIONAL
-         │    Only if audit shows creative fatigue
-         │    (frequency >3x, CTR declining, health score low on creative)
-         │    Workflow: creative_only for winning audiences only
-         │
-         ├──► [APPROVAL] Conductor → Operator
-         │    Package: audit summary + reallocation plan + new creatives (if any)
-         │    Operator approves / edits per item
-         │
-         ├──► [EXECUTE] Adros Deployer specialist
-         │    Tools: set_campaign_status (pause/enable),
-         │           update_ad_set (budgets),
-          │           create_ad_creative (new creatives),
-          │           set_google_campaign_bidding_strategy
-         │    Manual blockers still matter here: OAuth reconnects, policy/TOS prompts,
-         │    domain verification, Merchant Center readiness, billing approval, and
-         │    asset-upload steps may pause execution until a human checks them off.
-         │
-         └──► [MONITOR] Adros daily webhook (continues)
-              Already running — no separate "start monitor" step
-```
+### Recommended flow
+
+1. **Intake** - collect business name, account IDs, and main concern
+2. **Connect** - confirm Google/Meta access
+3. **Audit** - **Adros CMO** runs the audit workflow
+4. **Conditional research** - if the audit reveals positioning, audience, or competitive gaps, route into **Adros Research**
+5. **Ingest** - **Adros Research** backfills context if new research was gathered
+6. **Reallocation / fixes** - **Adros Deployer** executes approved fixes or change plans
+7. **Creative refresh** - **Adros CD** only when needed
+8. **Approval** - operator reviews the proposed actions
+9. **Execute** - approved changes go live
+10. **Monitor** - ongoing monitoring continues
 
 ### Who does what (Existing)
 
 | Phase | Specialist | Tool/System | Artifact |
 |---|---|---|---|
-| Intake | Conductor | Operator channel | Minimal context |
+| Intake | Conductor or Adros CEO | Operator channel | Minimal context |
 | Connect | Client + Adros | OAuth flow | Access granted |
-| **Audit** | **Adros CMO** | `meta_audit` / `google_audit` workflow | Audit `.xlsx` + health score |
-| Research (conditional) | Research bridge | Same as Journey A | Research JSON |
-| Ingest | Adros CMO | Same memory tools | Populated Adros DB |
-| Reallocation | Adros (Adros Deployer) | Audit `.xlsx` Tab 5/6 | Part of audit file |
-| Creative refresh (conditional) | Adros CD | `creative_only` workflow | New copy + images |
-| Approval | Conductor | Conductor task tracker + client communication channel | Operator's decision |
-| Execute | Adros (Adros Deployer) | MCP write tools | Updated campaigns |
-| Monitor | Adros webhook | Daily loop | Alerts |
+| Audit | Adros CMO | Audit workflows | Audit deliverables |
+| Research (conditional) | Adros Research | Research workflows | Supplemental research outputs |
+| Ingest | Adros Research | Memory + brand tools | Updated business context |
+| Reallocation / fixes | Adros Deployer | Execution tools | Applied or queued changes |
+| Creative refresh (conditional) | Adros CD | Creative workflows | New copy + creatives |
+| Approval | Operator | Command Center or external approval channel | Decision |
+| Execute | Adros Deployer | Deployment tools | Updated campaigns |
+| Monitor | Adros | Daily monitoring loop | Alerts |
 
 ---
 
-## 4. Shared artifact contract (how files flow between specialists)
+## 4. Shared artifact contract
 
-This is what an external conductor needs for routing: every phase produces a **named artifact** that the next phase consumes. Naming is stable, format is stable.
+External conductors should think in terms of **named artifacts** handed from one phase to the next.
 
 | Artifact | Produced by | Consumed by | Format |
 |---|---|---|---|
-| `[Client]_Research.json` | Research bridge (external LLM research / crawl / other tools) | Adros (ingest) | JSON schema (see §6) |
-| `[Client]_Brand_Assets/` | Research bridge / Adros `build_brand_profile` | Adros CD | Folder in Adros DAM |
-| `[Client]_Keyword_Research.xlsx` | Adros CMO | Structure phase | Excel, template-controlled |
-| `[Client]_Market_Research.xlsx` | Adros CMO | Structure phase | Excel |
-| `[Client]_Meta_Ads_Audit.xlsx` | Adros CMO | Adros Deployer (execute) | Excel, 8 tabs |
-| `[Client]_Meta_Ads_Structure.xlsx` | Adros CMO | Adros CD | Excel, 6 tabs |
-| `[Client]_Meta_Ads_Copy.xlsx` | Adros CD | Adros Deployer (launch) | Excel |
-| Generated creatives (images) | Adros CD (via nano_banana_pro) | Adros Deployer (launch) | PNG in Adros DAM |
-| `[Client]_Monthly_Report.pptx` | **Operator or external deck pipeline** | Conductor → Operator | PPT, templated target-state |
+| Research input package | Research bridge / Adros Research | Adros Research / Adros CMO | Structured docs, sheets, or JSON depending on workflow |
+| Brand assets | Research bridge / brand extraction | Adros CD | DAM assets |
+| Keyword research deliverable | Adros Research | Structure phase | Workbook/package output |
+| Market research deliverable | Adros Research | Structure phase | Package output |
+| Audit deliverable | Adros CMO | Adros Deployer / operator | Workbook/package output |
+| Structure deliverable | Adros CMO | Adros CD / Adros Deployer | Workbook/package output |
+| Copy + creative deliverable | Adros CD | Adros Deployer | Workbook + assets |
 
-**Important:** all `.xlsx` templates are controlled by Adros via `get_output_template(template_type)`. The conductor should not hand-roll these schemas — it calls Adros, Adros returns the template spec, specialists fill it.
-
-**Current export truth:** native Adros is strongest today on `.xlsx` artifacts, stored files, and audit PDF generation. PPT/DOCX-style executive exports should be treated as external or target-state unless your environment has added that report pipeline explicitly.
+**Important:** public docs intentionally describe these at the package level. Specific file mixes can vary by workflow or deployment, so consumers should rely on task status and the package expectations exposed by their own environment.
 
 ---
 
-## 5. Conductor routing logic (what triggers what)
+## 5. Routing logic
 
-This is the decision tree Conductor uses when the operator says "onboard new client":
+At a high level:
 
-```
-Operator: "onboard [client]"
-  │
-  ├─ Conductor asks: "Do they already have an active ad account running ads?"
-  │   │
-  │   ├─ NO  → Journey A (fresh)
-  │   │        - Create a parent tracker item with 8 subtasks
-  │   │        - assign_and_wake → research bridge (external LLM research / crawl / stack)
-  │   │        - On research completion → assign_and_wake → Adros CMO (ingest + keyword research)
-  │   │        - On completion → assign_and_wake → Adros CMO (structure)
-  │   │        - On completion → assign_and_wake → Adros CD
-  │   │        - On completion → notify operator for approval
-  │   │        - On approval → assign_and_wake → Adros Deployer (launch)
-  │   │        - Mark issue done, monitoring begins auto
-  │   │
-  │   └─ YES → Journey B (existing)
-  │            - Create a parent tracker item with 7 subtasks
-  │            - Wait for OAuth connect signal
-  │            - assign_and_wake → Adros CMO (audit)
-  │            - Branch: if audit flags creative fatigue
-  │              → assign_and_wake → Adros CD
-  │            - Branch: if audit flags weak positioning
-  │              → assign_and_wake → research lane (external LLM research / supplemental tools)
-  │            - Converge → notify operator for approval
-  │            - On approval → assign_and_wake → Adros Deployer (execute fixes)
-  │            - Monitoring already running, just resume
-```
+- **Fresh client:** research first -> structure -> creative -> approval -> launch
+- **Existing client:** audit first -> optional research -> fixes/creative -> approval -> execute
 
-**Key rules:**
-1. **Every `assign_and_wake` should advance the conductor’s task state** — avoid side channels outside the tracker
-2. **Every phase completion closes its subtask + creates the next one** — Conductor reacts to tracker events (prefer event-driven updates over tight polling)
-3. **The operator is only pinged at APPROVAL gates** — not for intermediate phase completions
-4. **Supplemental research is optional in Journey B** — audit data often replaces a full fresh research pass
+If you are building an external conductor, the safest pattern is:
+
+1. keep every phase as a tracked task
+2. route only at clear phase boundaries
+3. surface approvals only at review gates
+4. treat supplemental research as conditional, not mandatory
 
 ---
 
-## 6. Research bridge contract (orchestration layer)
+## 6. Public guidance for research bridges
 
-Adros does **not** prescribe a single vendor lock beyond the intended research mix. Product direction is **Perplexity + DataForSEO + Firecrawl + platform-native data**. If your environment wires Perplexity through an external conductor/bridge first, that is still acceptable; just keep the contract stable. Whatever stack shape you use, expose a **thin bridge** so Conductor routing stays the same: one JSON contract in, one JSON contract out, then Adros ingest.
+Adros does **not** require a single vendor lock-in for research bridges. The public product direction is **Perplexity + DataForSEO + Firecrawl + platform-native data**. Whatever stack you use, keep the bridge thin:
 
-### Input (Orchestration → Research Bridge)
-```json
-{
-  "task_id": "<task-ledger-issue-id>",
-  "task_type": "onboarding_research" | "monthly_report_design",
-  "research_stack": ["external_llm_research", "firecrawl"],
-  "client": {
-    "name": "Acme Travel",
-    "website": "https://example.com",
-    "adros_client_id": "<client-uuid>"
-  },
-  "brief": "<full research prompt from Adros /me/onboarding/brief>",
-  "output_schema": { /* JSON schema the research lane must conform to */ },
-  "deadline": "2026-01-15T00:00:00Z"
-}
-```
+- one structured input contract in
+- one structured research payload out
+- then hand control back to Adros for ingest and downstream routing
 
-`research_stack` is illustrative — omit or replace with the tools your org actually calls.
-
-### Output (Bridge → Conductor)
-```json
-{
-  "task_id": "orchestration-task-id",
-  "status": "complete",
-  "artifacts": [
-    {
-      "type": "research_json",
-      "path": "<gdrive link or local path>",
-      "schema_version": "1.0"
-    },
-    {
-      "type": "research_pdf",
-      "path": "<gdrive link>"
-    }
-  ],
-  "adros_ingest_call": {
-    "endpoint": "POST /me/onboarding/ingest",
-    "payload": { /* structured result ready for Adros */ }
-  }
-}
-```
-
-### Bridge responsibilities
-1. Expose a wakeup endpoint (for example `POST /bridge/research/wake`) so Conductor `assign_and_wake` works uniformly across tools.
-2. Translate the conductor’s tracker row → calls to your research stack (Perplexity API if you use it, another LLM research API, crawl job, other MCP tools — **not** a deprecated third-party research UI).
-3. Track completion via each provider’s callback/webhook or polling, then normalize into the output shape above.
-4. Validate output against `output_schema` before marking the tracker step complete.
-5. Post completion back to the conductor’s task tracker (comments + attachments).
-6. Call the Adros ingest endpoint with the structured payload.
-
-If a provider has no clean API, the bridge may still use a **supervised automation** path — but the **external contract** from Conductor’s view should remain this JSON; swap implementations behind the bridge as tools change.
-
----
-
-## 7. Optional onboarding helper endpoints
-
-The paths below illustrate a common pattern for **external research lanes + Adros ingest**. Availability depends on your Adros version and deployment — **always confirm in live [OpenAPI](https://api.adros.ai/docs)** before relying on them in production.
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/me/onboarding/brief?url=<url>&journey=fresh\|existing` | Returns structured research prompt + expected output schema |
-| POST | `/me/onboarding/ingest` | Accepts research JSON, writes business_context + personas + brand assets |
-| GET | `/me/reports/monthly/{client_id}/brief` | Returns deck design brief + report data for an external renderer |
-| POST | `/me/reports/monthly/{client_id}/attach` | Accepts finished deck URL from a bridge |
-| GET | `/me/clients/active` | Canonical client list for conductor configuration (see [Integration Notes](/integrations/integration-notes)) |
-
-Coordinate rollout with your backend team so bridges and APIs ship together.
-
----
-
-## 8. What orchestration layers should avoid
-
-- Avoid hand-rolling research briefs when Adros can supply them via `/me/onboarding/brief` — Adros owns the marketing cognition.
-- Avoid hand-rolling `.xlsx` schemas — call Adros `get_output_template`. Templates are versioned on the Adros side.
-- Avoid putting the research bridge in the critical webhook-handling path for **live ads** alerts. Research should stay bridge-gated: if the bridge is down, Journey A can stall at the research step while the operator is notified — platform monitoring must not depend on the research lane for liveness.
-- Avoid polling for research completion in a tight loop; prefer provider webhooks or a slow janitor sweep.
-- Route research work through the conductor’s task tracker so approvals and artifacts stay auditable alongside Adros task history.
-
----
-
-## 9. Design considerations (external orchestration)
-
-1. **Connect-account flow for Journey B** — decide whether Conductor owns the OAuth nudge to the client, or a separate admin step does (affects UX when the client is slow to act).
-
-2. **Monthly report cadence** — decide whether the orchestration layer schedules reports (cron) or the operator triggers them. Automatic schedules may map to an additional workflow such as `monthly_report`.
-
-3. **Research lane: API vs browser** — bridge complexity depends on whether your research tool exposes a stable API or needs browser automation.
-
-4. **Deck template storage** — choose where master templates live (shared drive vs Adros-served spec) based on how you want to version and distribute them.
-
-5. **Multi-client batching** — decide whether parallel onboarding flows are allowed or serialized, based on bridge capacity and operator load.
-
----
-
-## 10. TL;DR (external orchestration)
-
-- **Two journeys, one backbone.** Fresh = build from scratch (external research → Adros structure/creative → launch). Existing = audit first (Adros audit → reallocate/fix → execute).
-- **Adros encodes both journeys** in its workflow library. Conductors route work and artifacts; they should not reimplement Adros marketing logic.
-- **Research lanes slot in via a bridge** that presents them like any other specialist. Bridge contract is in §6.
-- **The human operator is only pinged at approval gates.** Other steps should flow agent-to-agent through the conductor’s tracker and Adros tasks.
-- **Optional helper endpoints** (§7) may exist depending on version — verify in OpenAPI before building automation around them.
-- **Design choices** in §9 affect how aggressively you can automate onboarding at scale.
-
-— Adros team
+That keeps your orchestration layer stable even when providers change.

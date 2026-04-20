@@ -5,74 +5,70 @@ description: Common questions, setup mistakes, and fixes. The fastest way to uns
 
 # FAQ & Troubleshooting
 
-Common questions and issues we've seen. If you're stuck, start here — the fix is probably one of these.
+Common questions and issues we've seen. If you're stuck, start here first.
 
 ## Dashboard & product
 
 ### Do I have to use MCP, or can I use the app only?
 
-**You can use either or both.** The dashboard at [app.adros.ai](https://app.adros.ai) drives the same backend: **Command Center** (tasks, timeline, approvals), **Strategy Workspace**, **Files**, **Campaigns**, **CEO**. MCP is for AI clients (Claude, Cursor, custom agents) that call tools on `https://api.adros.ai/mcp`. Operators often live in the app; integrators often use MCP + REST together.
+**You can use either or both.** The dashboard at [app.adros.ai](https://app.adros.ai) drives the same backend as MCP and REST: **Command Center**, **Strategy Workspace**, **Files**, **Campaigns**, and **CEO**.
 
 ### Where do approvals live?
 
-**In-app:** Command Center (`/command-center` or `/dashboard`) and the **Approvals** page when wired. **REST:** `POST /api/v1/tasks/{task_id}/approve`, `POST /api/v1/tasks/{task_id}/reject`, and `GET /api/v1/approvals/pending`. Approval emails (Resend) and optional WhatsApp nudges depend on your settings and client integration config. See [REST — Dashboard & Orchestration](/integrations/rest-dashboard).
+**In-app:** Command Center (`/command-center` or `/dashboard`) and the Approvals page when wired.  
+**REST:** `POST /api/v1/tasks/{task_id}/approve`, `POST /api/v1/tasks/{task_id}/reject`, and `GET /api/v1/approvals/pending`.
+
+### Command Center says "failed" even though files were created
+
+**File presence is not the same thing as task completion.** A task can upload artifacts and still end in `review`, `paused`, or `failed` if required deliverables are incomplete, package-level work is still outstanding, or the uploaded outputs need revision.
+
+**What to check next:**
+
+1. Open the task detail and read the latest timeline entries.
+2. Check whether an approval, blocker, or follow-up step is still open.
+3. If you are integrating via REST, compare `GET /api/v1/tasks/{task_id}` with `GET /api/v1/tasks/{task_id}/events` instead of using file count alone.
+
+### Why did Step 1 land as 5 files instead of 7?
+
+**Some research packages are staged.** In many flows, the core written strategy/research docs land first, while supporting spreadsheet-style deliverables are handled as follow-up outputs in the same overall package.
+
+Treat the package as complete only when Command Center marks it complete or your operator confirms completion. If you are integrating programmatically, key off task status and the deliverables expected for your package rather than a raw file count.
 
 ### Quality track: scorecards or guardrails missing
 
-**Symptoms:** Task loads but no scorecard, guardrails always empty, or audit artifacts not appearing.
+Check these first:
 
-**Checks:**
-
-1. **Backend deploy** — Quality track code must be on the API you are calling.
-2. **Migration** — `025_audit_quality_track` applied to the same Postgres as the API.
-3. **Env** — `AUDIT_QUALITY_TRACK_ENABLED` not set to disable (default in code is usually on unless overridden).
-4. **Task type** — Scorecard endpoints apply to audit flows that completed the quality path; not every task is an audit.
-
-If in doubt, confirm against [OpenAPI](https://api.adros.ai/docs) and a known audit task in staging.
+1. The backend deploy you are calling includes the quality-track code
+2. The target database has the required migration
+3. The target environment has quality track enabled
+4. The task is an audit-type task that actually completed the quality path
 
 ---
 
-## Connection & Setup
+## Connection & setup
 
 ### 404 on contract endpoints
 
-**Symptom:** Your worker or REST client hits `https://api.adros.ai/contract/spec` and gets a 404, so it falls back to a stub.
+You likely dropped the `/api/v1` prefix.
 
-**Cause:** You dropped the `/api/v1` prefix. **Every Adros REST route lives under `/api/v1/*`.**
-
-**Fix:** Your base URL must be:
-
+```text
+Correct: https://api.adros.ai/api/v1
+Wrong:   https://api.adros.ai
 ```
-✅ https://api.adros.ai/api/v1
-❌ https://api.adros.ai
-```
-
-Every example in the [Contract Layer](/integrations/contract-layer) doc shows the full prefix. If you're reading a tutorial that omits it, the tutorial is wrong. Check your `ADROS_BASE_URL` environment variable.
 
 ### 401 Unauthorized on every call
 
-**Symptom:** Every tool call returns `401 Unauthorized`.
+Common causes:
 
-**Cause:** Usually one of three:
+1. Wrong header name
+2. Wrong token
+3. Rotated token
 
-1. **Wrong header name.** MCP uses `X-User-Token`, REST uses `Authorization: Bearer`. They're different.
-2. **Token typo.** The `lyr_` prefix is part of the token — don't strip it.
-3. **Token rotated.** If you regenerated your token in Settings, the old one stops working immediately. Update every client that uses it.
-
-**Fix:** Pull a fresh token from [app.adros.ai/settings](https://app.adros.ai) and verify with:
-
-```bash
-curl -H "Authorization: Bearer lyr_YOUR_TOKEN" \
-  "https://api.adros.ai/api/v1/contract/specs?stage=optimizing"
-```
-
-If that returns 200 with JSON, the token works. If it still 401s, the token is wrong.
+REST uses `Authorization: Bearer lyr_YOUR_TOKEN`. MCP uses `X-User-Token: lyr_YOUR_TOKEN`.
 
 ### Claude Desktop shows 0 tools after adding Adros
 
-**Cause:** Transport type misconfigured. Adros uses Streamable HTTP, not stdio.
-
-**Fix:** Your `claude_desktop_config.json` entry must use the `url` field (HTTP), not `command` (stdio):
+Adros uses **Streamable HTTP**, not stdio.
 
 ```json
 {
@@ -85,166 +81,47 @@ If that returns 200 with JSON, the token works. If it still 401s, the token is w
 }
 ```
 
-Restart Claude Desktop fully (quit, not just close window). The hammer icon at the bottom of the chat input should show the full Adros tool set (on the order of **~74** tools; exact count may change with releases).
+Restart Claude Desktop fully after changing the config.
 
 ### Cursor can't find Adros tools
 
-**Fix:** Cursor's MCP integration is still evolving. Make sure:
+Check that:
 
-1. You're on **Cursor 0.50+** (earlier versions had MCP issues)
-2. MCP is enabled in **Settings → Features → MCP**
-3. Server type is set to **`http`**, not `stdio`
-4. You've restarted Cursor after adding the config
-
-If tools still don't load, check `~/.cursor/mcp-logs/` for errors.
+1. MCP is enabled in Cursor
+2. The server type is HTTP, not stdio
+3. You restarted Cursor after adding the config
+4. Your token and URL are correct
 
 ---
 
-## Monitoring & Webhooks
-
-### My daily email says "frequency 1.38, CTR dropped 0%" — is my ad actually broken?
-
-**The alert copy was wrong (fixed in April 2026).** The old monitor code was reading `ad_name` and `ctr_change_pct` from the fatigue detector result dict, but those keys didn't exist — the real keys are `entity_name` and `ctr_change_wow`. Every alert defaulted to "Ad" (generic name) and "0%" (default value).
-
-**What it should say now:** the actual signal that tripped the alert — e.g., *"CPA rose 48.2% week-over-week — performance declining"* — not a hardcoded "CTR dropped X%" string.
-
-**If you're still seeing old-style alerts**, force a manual refresh:
-
-```bash
-curl -X POST -H "Authorization: Bearer lyr_YOUR_TOKEN" \
-  "https://api.adros.ai/api/v1/me/monitoring/run-now"
-```
-
-The response includes the full issues list inline so you can verify the new copy format.
-
-### An ad is flagged for fatigue but frequency is only 1.4
-
-**Fatigue has three triggers, not just frequency.** The detector flags an ad if ANY of these fire:
-
-1. **Frequency** ≥ 2.5 (early warning), ≥ 3.0 (fatigue), ≥ 4.0 (critical)
-2. **CTR decline** week-over-week beyond thresholds
-3. **CPA rise** ≥ critical threshold
-4. **CPM rise** ≥ 25%
-
-So an ad with frequency 1.4 but CPA up 48% week-over-week will show up as "fatigued" — the signal list in the alert tells you which metric tripped it.
+## Monitoring & webhooks
 
 ### Daily webhook never fires even though I configured the URL
 
-**Check three things:**
+Check:
 
-1. **Plan tier.** Monitoring only runs for `pro`, `pro_annual`, or `trial` accounts. Free tier doesn't get the daily monitor.
-2. **Connected accounts.** The monitor skips users with no Meta OR Google ad account tokens stored.
-3. **Healthy run = silent.** If all 6 checks pass with zero issues, the monitor sends NO webhook (and no email). You'll only hear from it when something's wrong.
+1. Your environment actually has monitoring enabled
+2. Relevant ad accounts are connected
+3. There may be no issues to report
 
-To force a test run regardless: `POST /api/v1/me/monitoring/run-now`.
+Use `POST /api/v1/me/monitoring/run-now` to force a test run when supported by your deployment.
 
-### HMAC signature doesn't verify on my webhook receiver
+### HMAC signature doesn't verify on my receiver
 
-**Common mistake:** not using `sort_keys=True` when serializing the JSON body before computing HMAC. Adros signs `json.dumps(payload, sort_keys=True).encode("utf-8")`. Your verifier must match exactly.
-
-```python
-import hmac, hashlib, json
-
-def verify(body_bytes: bytes, signature_header: str, secret: str) -> bool:
-    # signature_header looks like "sha256=<hex>"
-    expected = "sha256=" + hmac.new(
-        secret.encode("utf-8"),
-        body_bytes,
-        hashlib.sha256,
-    ).hexdigest()
-    return hmac.compare_digest(expected, signature_header)
-```
-
-Hash the **raw request body bytes** exactly as received. Don't re-serialize on your side — you'll get a different key order.
+Use the raw request body and verify against `X-Adros-Signature`. Your receiver should be idempotent and should not rely on retries.
 
 ---
 
-## Creative Generation
+## Creative generation
 
 ### `generate_creative` returns the same image twice
 
-**By design.** Adros has a **60-second idempotency cache** on `generate_creative` keyed on `hash(prompt[:200] + user_id + aspect_ratio)`. Two calls within 60s with the same prompt return the same image to prevent retry-storm duplicates.
-
-**If you want a new image**, change the prompt (even trivially) or wait 60 seconds.
+There is an idempotency window to prevent duplicate results from retry storms. If you need a new variation, change the prompt or wait for the cache window to pass.
 
 ### `generate_creative` returns 429 Too Many Requests
 
-**Rate limit:** 20 calls per hour per user. Hit that and you get 429 until the hour rolls over.
+Creative generation is rate-limited. Wait for the window to reset or reduce duplicate calls.
 
-**Fix:** Check `recall_creative_history` first — you might be regenerating variations you already have. Or wait. The limit is deliberately low to keep costs sane.
+### Image looks generic or off-brand
 
-### Image looks generic / off-brand
-
-**Almost always a `build_creative_prompt` issue, not a generation issue.** Three checks:
-
-1. **Are you using `mode='bold'`?** Default is `autonomous` which is literal/safe. `bold` produces editorial, scroll-stopping output.
-2. **Are you using `auto_select=True`?** Without it, the prompt doesn't anchor to a pattern's `image_generation_prompt` field — you lose the moat.
-3. **Have you uploaded brand assets?** If the client's DAM is empty, the prompt has no logo/colors/fonts to inject. Call `build_brand_profile(url)` first.
-
-Canonical call:
-
-```python
-prompt = build_creative_prompt(
-    client_name="Acme Travel",  # your client name
-    auto_select=True,
-    mode="bold",
-)
-image = generate_creative(
-    prompt=prompt,
-    generator="nano_banana_pro",
-)
-```
-
----
-
-## Data & Memory
-
-### `get_business_context` returns empty for a client I know I saved
-
-**Client scoping is strict.** If you saved context with `client_id=<uuid>` (agency mode) but read it with `client_id=None` (solo mode), you'll get an empty result. They're different rows.
-
-**Fix:** Always pass the same `client_id` (or consistently `None` for solo) across save and read. The `_client_filter` helper enforces this — mixing them creates ghost data.
-
-### `recall_weekly_log` returns nothing after successful writebacks
-
-Same scoping issue. Check that the `client_id` you used in `contract_writeback` matches the one you're passing to `recall_weekly_log`.
-
-Also: `recall_weekly_log` defaults to `weeks_back=2`. If your writebacks are older than that, bump it to `weeks_back=8`.
-
-### Pattern DB doesn't show `enrichment_metadata` field
-
-**Intentional.** `enrichment_metadata` and `image_generation_prompt` are stripped from the `PatternDetail` Pydantic schema to prevent scraping — they're the moat. They ARE available to MCP calls (via `get_blueprint`), just not to public REST schemas.
-
----
-
-## Account & Billing
-
-### Connected Meta account "expired" silently
-
-**Meta access tokens have a ~60 day lifetime.** Adros has a background service (`token_refresh_service.py`) that refreshes them proactively, but if a client revokes permission in their Business Settings, the refresh fails too. The monitor then silently skips that check.
-
-**Fix:** Reconnect from [app.adros.ai/settings](https://app.adros.ai). Adros doesn't currently alert you proactively on lost access — that's a known gap being fixed.
-
-### Lead Gen ads fail with "TOS not accepted" even though I accepted
-
-**Meta Lead Gen TOS is per-app per-page.** Accepting Adros on one Page doesn't carry over to other Pages. The client must add the Adros Business App ID to their Business Manager as a partner, OR accept TOS on each individual Page.
-
-This is a Meta limitation, not an Adros bug. There's no way to accept TOS "globally."
-
-### Credits exhausted mid-session
-
-The `CreditGateMCPApp` middleware hard-blocks tool calls when `credits_used >= monthly_credits`. You'll get an explicit error, not a silent fail.
-
-**Fix:** Upgrade plan at [app.adros.ai/billing](https://app.adros.ai), or wait for monthly reset.
-
----
-
-## Still stuck?
-
-- **Check [REST — Dashboard & Orchestration](/integrations/rest-dashboard)** — map of task/workspace/file/campaign routes
-- **Check the [Technical Overview](/integrations/overview)** — common integration pitfalls are summarized in section 11
-- **Check the [Integration Notes](/integrations/integration-notes)** — deeper notes for anyone wiring Adros into an external orchestration layer
-- **Check your token works:** `curl -H "Authorization: Bearer lyr_YOUR_TOKEN" "https://api.adros.ai/api/v1/contract/specs"`
-- **Check Railway status:** if Adros itself is down (rare), every call returns 5xx — not your fault
-
-For anything not covered here, the [Technical Overview](/integrations/overview) is the source of truth on how Adros actually behaves.
+Usually this is a prompt-construction issue, not a generation issue. Make sure you are using the correct workflow, brand context, and generation settings for your environment.
