@@ -1,12 +1,12 @@
 ---
-title: REST — Dashboard & Orchestration
+title: REST - Dashboard & Orchestration
 description: High-level map of REST and WebSocket routes that power Command Center, Strategy Workspace, Files, Campaigns, chat, and integrations. Authoritative detail lives in OpenAPI.
 ---
 
-# REST — Dashboard & Orchestration
+# REST - Dashboard & Orchestration
 
 **Base URL:** `https://api.adros.ai/api/v1`  
-**Auth:** `Authorization: Bearer lyr_<your_mcp_token>` on HTTP routes (same token as Settings → MCP).
+**Auth:** `Authorization: Bearer lyr_<your_mcp_token>` on HTTP routes.
 
 This page is a **topic index**, not a full API spec. For request/response schemas, required query params, and the complete route list, use **[OpenAPI](https://api.adros.ai/docs)** on the live API.
 
@@ -25,12 +25,18 @@ Deploys can lag repository `main`; if a path returns 404, verify your environmen
 | `GET` | `/tasks/{task_id}/events` | Timeline / activity feed |
 | `POST` | `/tasks/{task_id}/approve` | Approve task |
 | `POST` | `/tasks/{task_id}/reject` | Reject with feedback |
+| `POST` | `/tasks/{task_id}/pause` | Pause task |
+| `POST` | `/tasks/{task_id}/resume` | Resume a paused task |
+| `POST` | `/tasks/{task_id}/resume-with-instructions` | Resume a paused task with updated context |
+| `POST` | `/tasks/{task_id}/close` | Close task without deleting history |
 | `POST` | `/tasks/{task_id}/comments` | Add discussion; optional linked follow-up task |
 | `GET` | `/tasks/{task_id}/blockers` | List human-required blockers |
 | `POST` | `/tasks/{task_id}/blockers` | Create blocker |
 | `POST` | `/tasks/{task_id}/blockers/{blocker_id}/resolve` | Resolve blocker |
 | `GET` | `/approvals/pending` | Pending approvals queue |
 | `POST` | `/audits/trigger` | Trigger audit flow |
+
+**Status note:** Task status reflects the full lifecycle, not just file upload. A task can still be `review`, `paused`, or `failed` after artifacts appear if approvals, package completion, or requested revisions are still outstanding.
 
 ### Audit quality track (when enabled)
 
@@ -40,7 +46,7 @@ Deploys can lag repository `main`; if a path returns 404, verify your environmen
 | `GET` | `/tasks/{task_id}/guardrails` | Guardrail status |
 | `GET` | `/projects/{project_id}/audit-trends` | Trend summary for project |
 
-Backend behavior depends on migration **`025_audit_quality_track`** and env **`AUDIT_QUALITY_TRACK_ENABLED`**. See the [Introduction](/) (Quality track bullet) and [FAQ — Quality track](/faq#quality-track-scorecards-or-guardrails-missing).
+Backend behavior depends on migration **`025_audit_quality_track`** and env **`AUDIT_QUALITY_TRACK_ENABLED`**.
 
 ---
 
@@ -50,7 +56,7 @@ Backend behavior depends on migration **`025_audit_quality_track`** and env **`A
 |--------|------|--------|
 | `GET` | `/workspace/summary?client_id=...` | Stage-oriented summary (artifacts, masters, related tasks) |
 | `POST` | `/workspace/snapshot` | Record workspace snapshot to R2 |
-| `GET` | `/workspace/stages/{stage_id}/preview` | Structure preview (e.g. CSV/XLSX row table) |
+| `GET` | `/workspace/stages/{stage_id}/preview` | Stage preview |
 | `POST` | `/workspace/stages/{stage_id}/master` | Promote artifact to stage master |
 | `POST` | `/workspace/stages/{stage_id}/review` | Stage review note; optional follow-up task |
 
@@ -70,7 +76,7 @@ Backend behavior depends on migration **`025_audit_quality_track`** and env **`A
 |--------|------|--------|
 | `POST` | `/chat` | Chat completion (supports `client_id` where applicable) |
 | `GET` | `/chat/memories` | Memory debug |
-| WebSocket | `/ws/chat?token=lyr_...` | Streaming chat (token as query param) |
+| WebSocket | `/ws/chat?token=lyr_...` | Streaming chat |
 
 ---
 
@@ -96,11 +102,9 @@ Requires R2 env configuration on the server. Errors should indicate misconfigura
 | `GET` | `/me/campaigns/{campaign_id}/keywords` | Drill-down |
 | `GET` | `/me/meta/campaigns` | Meta campaigns when connected |
 
-Account selection and scope behavior are product-specific; see UI and OpenAPI.
-
 ---
 
-## Integrations (e.g. WhatsApp demo)
+## Integrations
 
 | Method | Path | Notes |
 |--------|------|--------|
@@ -120,9 +124,6 @@ Account selection and scope behavior are product-specific; see UI and OpenAPI.
 | `DELETE` | `/me/provider-integrations/{provider}` | Revoke provider secret |
 | `POST` | `/me/research/perplexity/search` | Dedicated metered Perplexity research route |
 
-Dashboard note:
-- `client/src/pages/ApiKeys.tsx` now exposes a user-facing panel for Anthropic, OpenAI, Perplexity, and DataForSEO BYOK secret management/testing.
-
 ---
 
 ## Monitoring
@@ -137,19 +138,15 @@ Dashboard note:
 
 ## Real-time task events
 
-WebSocket:
-
 ```text
 wss://api.adros.ai/api/v1/ws/events/{task_id}?token=lyr_YOUR_TOKEN
 ```
 
-Auth uses the **same** `lyr_` token as MCP (query param; browsers cannot set Bearer on WS). The server verifies **task ownership** before streaming.
+The server verifies task ownership before streaming.
 
 ---
 
 ## Contract & client state
-
-Still used by orchestration workers and lifecycle tooling:
 
 | Method | Path | Notes |
 |--------|------|--------|
@@ -158,13 +155,11 @@ Still used by orchestration workers and lifecycle tooling:
 | `POST` | `/contract/writeback` | Specialist writeback |
 | `GET` | `/me/clients/{client_id}/state` | Client lifecycle state |
 
-Details: [Contract Layer](/integrations/contract-layer).
-
 ---
 
 ## Related docs
 
-- [Introduction](/) — product framing and hybrid OS
-- [Quickstart](/quickstart) — MCP + dashboard routes
-- [Dashboard & frontend integration](/integrations/ui-handoff-2026-04-10) — frontend file map
-- [Technical Overview](/integrations/overview) — stack and data model
+- [Introduction](/) - product framing and hybrid OS
+- [Quickstart](/quickstart) - MCP + dashboard routes
+- [Dashboard & frontend integration](/integrations/ui-handoff-2026-04-10) - frontend file map
+- [Technical Overview](/integrations/overview) - stack and data model

@@ -5,7 +5,7 @@ description: Deterministic deliverable specs for Adros lifecycle stages. What to
 
 # Contract Layer
 
-The contract layer defines **exactly what each specialist must produce and consume** at every lifecycle stage. It is the bridge between Adros (marketing brain + task execution) and whatever is driving the workflow — whether that's the native CEO + Command Center or a custom conductor.
+The contract layer defines **what each specialist is expected to produce and consume** at every lifecycle stage. It is the public bridge between Adros and whatever is driving the workflow - the native dashboard, Adros CEO, or an external conductor.
 
 ---
 
@@ -15,10 +15,10 @@ Contracts are keyed by `(stage, task_type)`. Each contract specifies:
 
 | Field | Purpose |
 |-------|---------|
-| `produce` | Artifacts the specialist must deliver (e.g. `["structure_xlsx", "structure_rationale"]`) |
-| `accept` | What the specialist consumes (e.g. `["raw_research", "business_context"]`) |
-| `recommended_specialist` | Runtime actor ID: `adros_ceo` / `adros_cmo` / `adros_cd` / `adros_deployer` |
-| `review_gates` | Human checkpoints (e.g. "Operator approval") |
+| `produce` | Artifacts the specialist must deliver |
+| `accept` | What the specialist consumes |
+| `recommended_specialist` | Runtime actor ID: `adros_ceo` / `adros_research` / `adros_cmo` / `adros_cd` / `adros_deployer` |
+| `review_gates` | Human checkpoints |
 | `next_stage` | Where the workflow goes after this task completes |
 
 ### Example
@@ -29,51 +29,53 @@ Contracts are keyed by `(stage, task_type)`. Each contract specifies:
     "accept": ["structure_xlsx", "brand_profile", "business_context"],
     "recommended_specialist": "adros_cd",
     "next_stage": "approved",
-    "review_gates": ["Creative Director craft review", "Operator approval"],
+    "review_gates": ["Creative review", "Operator approval"],
 }
 ```
 
 **What happens:**
 
 1. Workflow engine queries `GET /contract/spec?stage=creative&task_type=generate_creatives`
-2. Returns the spec above
-3. Task is created with `assigned_agent = "adros_cd"` (from `recommended_specialist`)
+2. Adros returns the spec
+3. The task is created with the `recommended_specialist`
 4. When complete, the specialist calls `POST /contract/writeback` with the produced artifacts
-5. State machine advances to `next_stage`
+5. The lifecycle advances to `next_stage`
 
 ---
 
 ## REST vs MCP
 
-REST is for your Python workers and automation. MCP is for LLM clients calling Adros via natural language. Both use the same contract definitions.
+REST is for your automation and backend workers. MCP is for LLM clients calling Adros via natural language. Both use the same contract definitions.
 
-**Dashboard & orchestration REST:** The Contract endpoints above define **deliverable specs** and lifecycle **writeback**. Task inbox, event timelines, approvals, Strategy Workspace (snapshots, masters, stage review), Files, and deploy handoff use **additional** routes on the same `/api/v1` base — see [REST — Dashboard & Orchestration](/integrations/rest-dashboard).
+Task inbox, event timelines, approvals, Strategy Workspace, Files, and deploy handoff use additional routes on the same `/api/v1` base - see [REST - Dashboard & Orchestration](/integrations/rest-dashboard).
 
 ---
 
-## Auth (same as existing Adros endpoints)
+## Auth
 
-```
+```text
 Authorization: Bearer lyr_YOUR_TOKEN
 ```
 
 ---
 
-## Available specs (all stages)
+## Available specs (package-level view)
 
 | Stage | Task type | Owner (`recommended_specialist`) | Approval? |
 |---|---|---|---|
 | `intake` | `gather_business_context` | `adros_ceo` | No |
 | `intake` | `build_brand_profile` | `adros_ceo` | No |
-| `research` | `keyword_research` | `adros_cmo` | No |
-| `research` | `market_research` | `adros_cmo` | **Yes** |
-| `creative` | `generate_creatives` | `adros_cd` | **Yes** |
+| `research` | `keyword_research` | `adros_research` | No |
+| `research` | `market_research` | `adros_research` | Yes |
+| `creative` | `generate_creatives` | `adros_cd` | Yes |
 | `approved` | `launch_campaigns` | `adros_deployer` | No |
 | `live` | `first_week_check` | `adros_cmo` | No |
-| `optimizing` | `weekly_review` | `adros_cmo` | **Yes** |
-| `optimizing` | `creative_refresh` | `adros_cd` | **Yes** |
-| `optimizing` | `search_term_audit` | `adros_cmo` | **Yes** |
-| `optimizing` | `budget_reallocation` | `adros_cmo` | **Yes** |
+| `optimizing` | `weekly_review` | `adros_cmo` | Yes |
+| `optimizing` | `creative_refresh` | `adros_cd` | Yes |
+| `optimizing` | `search_term_audit` | `adros_cmo` | Yes |
+| `optimizing` | `budget_reallocation` | `adros_cmo` | Yes |
+
+**Package note:** Public docs describe research at the package/workflow level. Some research engagements may be delivered in stages, so rely on task status, event timeline, and operator review state rather than assuming the first uploaded file means the whole package is complete.
 
 ---
 
@@ -81,7 +83,7 @@ Authorization: Bearer lyr_YOUR_TOKEN
 
 ### List specs
 
-```
+```text
 GET /contract/specs
 ```
 
@@ -89,37 +91,33 @@ Returns all available `(stage, task_type)` specs with their produce/accept/speci
 
 ### Get single spec
 
-```
+```text
 GET /contract/spec?stage=creative&task_type=generate_creatives
 ```
 
-Returns one spec. Useful when the workflow engine needs to know what's next.
+Returns one spec. Useful when your workflow engine needs to know what comes next.
 
-### Writeback (specialist delivers)
+### Writeback
 
-```
+```text
 POST /contract/writeback
 Body: { stage, task_type, client_id, artifacts: {...}, notes: "..." }
 ```
 
-The specialist posts their produced artifacts. The contract service:
-1. Validates required artifacts from the `produce` list
-2. Stores them in task artifacts + R2
-3. Updates client lifecycle state to `next_stage`
-4. Logs the writeback as a task event
+The specialist posts produced artifacts. Adros validates required artifacts, stores them, updates lifecycle state, and logs the writeback as a task event.
 
 ---
 
 ## Design rationale
 
-**Why contracts?** Without them, each specialist has to know the state machine implicitly — and they get it wrong. Contracts make the workflow **deterministic**: given the same (stage, task_type), everyone produces and consumes the same things. This is how you get **traceability** instead of "the AI did something."
+**Why contracts?** Without them, each specialist has to know the state machine implicitly - and they get it wrong. Contracts make the workflow deterministic: given the same `(stage, task_type)`, everyone produces and consumes the same things.
 
-**Why runtime actor IDs?** Display names drift. Actor IDs (`adros_ceo`, `adros_cmo`, etc.) are stable, machine-readable, and match the actual task assignment fields in the orchestrator.
+**Why runtime actor IDs?** Display names drift. Actor IDs (`adros_ceo`, `adros_research`, `adros_cmo`, etc.) are stable, machine-readable, and match the assignment fields in the orchestrator.
 
 ---
 
 ## Related docs
 
-- [REST — Dashboard & Orchestration](/integrations/rest-dashboard) — full route map
-- [Onboarding Flows](/integrations/onboarding-flows) — end-to-end flows using these contracts
-- [Technical Overview](/integrations/overview) — stack and data model
+- [REST - Dashboard & Orchestration](/integrations/rest-dashboard) - full route map
+- [Onboarding Flows](/integrations/onboarding-flows) - end-to-end flows using these contracts
+- [Technical Overview](/integrations/overview) - stack and data model

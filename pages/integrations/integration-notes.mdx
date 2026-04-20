@@ -1,23 +1,23 @@
 ---
 title: Integration Notes
-description: Integration patterns, auth, and common pitfalls for Adros — MCP, REST, webhooks, or dashboard.
+description: Integration patterns, auth, and common pitfalls for Adros - MCP, REST, webhooks, or dashboard.
 ---
 
 # Integration Notes
 
-> **Audience:** Engineers wiring Adros into their stack — whether via MCP, REST, webhooks, or the dashboard.
+> **Audience:** Engineers wiring Adros into their stack - whether via MCP, REST, webhooks, or the dashboard.
 >
 > This page covers behaviors and constraints that are easy to miss if you only read the OpenAPI surface.
 
 ---
 
-## 1. What Adros is (one paragraph)
+## 1. What Adros is
 
-Adros is a **hybrid marketing OS**: FastAPI on Railway, React dashboard on Vercel, Supabase Postgres, Cloudflare R2 for scoped files, plus MCP (Streamable HTTP). It holds **4,022** enriched patterns, memory, creative generation, daily autonomous monitoring (6 checks; webhook to your URL), and **first-class operator workflows** on [app.adros.ai](https://app.adros.ai): **Command Center** (tasks, event timeline, approvals, blockers, comments/follow-ups), **Strategy Workspace** (staged artifacts, masters, deploy handoff), **Files**, **Campaigns**, and **Adros CEO** (routing into tracked work). **Tasks and events are the system of record** whether work starts in the UI or via MCP.
+Adros is a **hybrid marketing OS**: FastAPI on Railway, React dashboard on Vercel, Supabase Postgres, Cloudflare R2 for scoped files, plus MCP (Streamable HTTP). It includes patterns, memory, creative generation, monitoring, and first-class operator workflows on [app.adros.ai](https://app.adros.ai): **Command Center**, **Strategy Workspace**, **Files**, **Campaigns**, and **Adros CEO**.
 
-If you run a custom conductor on top, Adros remains the **marketing capability + data plane**; your layer can own *cross-tool* sequencing, human assignment, or policies Adros does not encode. You are not required to use an external orchestrator — native dashboards cover much of it.
+If you run a custom conductor on top, Adros remains the **marketing capability + data plane**; your layer can own cross-tool sequencing, human assignment, or policies Adros does not encode.
 
-**Research stack truth:** product direction is **Perplexity + DataForSEO + Firecrawl + platform-native account data**. Current repo/runtime already reflects **DataForSEO + Firecrawl** strongly. Perplexity now has user-level BYOK routes, a dedicated metered runtime route, and API Keys page controls for secret management/testing; verify broader workflow wiring before documenting a specific environment as fully live-native.
+**Research stack direction:** product direction is **Perplexity + DataForSEO + Firecrawl + platform-native account data**. Verify exact deployment support before documenting a specific environment as fully live-native.
 
 ---
 
@@ -27,23 +27,21 @@ If you run a custom conductor on top, Adros remains the **marketing capability +
 |---------|--------|
 | REST | `Authorization: Bearer lyr_YOUR_TOKEN` |
 | MCP | `X-User-Token: lyr_YOUR_TOKEN` |
-| WebSocket | `?token=lyr_YOUR_TOKEN` (query param) |
+| WebSocket | `?token=lyr_YOUR_TOKEN` |
 | Webhook delivery | Inbound to *your* server; you verify `X-Adros-Signature` |
 
-**One token, one user, one permission model.** MCP tools can do everything the REST API can do (and vice versa), scoped to the same user.
+**One token, one user, one permission model.**
 
 ---
 
 ## 3. MCP connection: the #1 support issue
 
-**Symptom:** "I added the MCP config but Claude doesn't see Adros tools."
-
 **Checklist:**
 
-1. Token is `lyr_...` (not a Supabase anon key or other string)
+1. Token is `lyr_...`
 2. `X-User-Token` header, not `Authorization: Bearer`
-3. URL is `https://api.adros.ai/mcp` (not `/api/v1/mcp` or `/mcp/sse`)
-4. Transport is **Streamable HTTP** (not SSE or stdio)
+3. URL is `https://api.adros.ai/mcp`
+4. Transport is **Streamable HTTP**
 5. Restart the MCP client fully after config change
 
 ---
@@ -51,96 +49,89 @@ If you run a custom conductor on top, Adros remains the **marketing capability +
 ## 4. Memory is append-only (mostly)
 
 - `business_context` and `personas` can be overwritten
-- `weekly_logs` should be **appended**, not replaced — they're the audit trail
-- Memory is scoped by `(user_id, client_id)` — `client_id = NULL` for solo mode
-- If you're building a "reset client" flow, you must explicitly clear each memory type
+- `weekly_logs` should be **appended**, not replaced
+- Memory is scoped by `(user_id, client_id)`
 
 ---
 
 ## 5. Multi-tenant scoping
 
-**Every** data access should be scoped to `user_id`. Where client context matters, also scope by `client_id`.
+Every data access should be scoped to `user_id`. Where client context matters, also scope by `client_id`.
 
-The service layer relies on callers to enforce ownership in some paths — specifically:
-- **Approve/reject** — verify the caller owns the task before mutating
-- **File access** — R2 prefixes include user/client scope; the REST layer enforces this
-- **Campaign data** — depends on which Google/Meta accounts the user has connected and selected
+Common examples:
+- approve/reject flows
+- file access
+- campaign data
 
 ---
 
 ## 6. Webhook delivery is fire-and-forget
 
-- **No retries.** If your server returns non-200, the payload is lost.
-- **Signature:** HMAC-SHA256 of `sort_keys=True` JSON using your webhook secret.
-- **Deduping:** use `dedupe_key` from the payload — same alert type + client + headline = same key.
-- Design your receiver to be idempotent.
+- **No retries**
+- **Signature:** HMAC-SHA256 using your webhook secret
+- **Deduping:** use `dedupe_key`
+- Design your receiver to be idempotent
 
 ---
 
-## 7. Contract layer — important details
+## 7. Contract layer - important details
 
-- `recommended_specialist` values are **runtime actor IDs** (`adros_ceo`, `adros_cmo`, `adros_cd`, `adros_deployer`) — not display names.
-- If you branch on specialist assignment, compare against these IDs, not legacy names.
-- `next_stage` in the spec is advisory — the actual state machine lives in the orchestrator service.
+- `recommended_specialist` values are runtime actor IDs: `adros_ceo`, `adros_research`, `adros_cmo`, `adros_cd`, `adros_deployer`
+- Branch on those IDs, not display names
+- `next_stage` in the contract is advisory; the orchestrator owns task lifecycle
 
 ---
 
 ## 8. Creative generation guardrails
 
-- Always `mode='bold'` + `nano_banana_pro` generator
-- 60-second idempotency window — duplicate requests within the window return the cached result
-- 20 requests/hour rate limit per user
-- Pattern blueprints anchor the generation — you select or auto-select a pattern first
+- Always use the documented generator/mode defaults for your deployment
+- `generate_creative` has an idempotency window
+- Creative generation is rate-limited
+- Pattern blueprints anchor generation quality
 
 ---
 
 ## 9. File upload flow
 
-1. Client calls `POST /files/upload` with multipart form data
-2. Backend validates scope (user_id + client_id)
-3. Object written to R2 under scoped prefix
-4. Metadata stored in task artifacts
+1. Client calls `POST /files/upload`
+2. Backend validates scope
+3. Object is written to R2 under a scoped prefix
+4. Metadata is stored in task artifacts
 5. Browse/download/delete via corresponding endpoints
-
-**Requires R2 env configuration on the server.** If missing, uploads fail with a configuration error, not a 404.
 
 ---
 
 ## 10. Task event timeline
 
-- Events are append-only — never mutated after creation
-- For "latest activity" feeds, query `ORDER BY created_at DESC`
-- WebSocket at `/ws/events/{task_id}?token=lyr_...` streams new events in real-time
-- Event types include: tool calls, model steps, guardrails, approvals, blocker creation/resolution, comments
+- Events are append-only
+- Query latest activity with `ORDER BY created_at DESC`
+- WebSocket at `/ws/events/{task_id}?token=lyr_...` streams new events
+- Task status is broader than file upload. A task can still be in review, paused, or failed after artifacts appear if package completion, approvals, or revisions are still pending.
 
 ---
 
 ## 11. Campaign scope and fallback
 
-- Google/Meta campaign data depends on **which accounts the user has connected and selected**
+- Google/Meta campaign data depends on the accounts the user has connected and selected
 - If the selected account is unavailable, the system may fall back to another accessible account
-- **Fallback behavior is surfaced in the UI** — the user sees which account data came from
-- When building integrations, always check the scope metadata in campaign responses
+- Fallback behavior should be surfaced in the UI or API consumer
 
 ---
 
 ## 12. Quality track prerequisites
 
-Before quality track features (scorecards, guardrails, audit artifact persistence) work:
+Before scorecards, guardrails, or audit artifact persistence work:
 
-1. Migration `025_audit_quality_track` applied to the database
-2. Env var `AUDIT_QUALITY_TRACK_ENABLED` set (or defaulting to enabled)
-3. The task is an audit-type task that completed the quality path
-
-If any of these are missing, scorecard endpoints return empty — not errors.
+1. Migration `025_audit_quality_track` must be applied
+2. `AUDIT_QUALITY_TRACK_ENABLED` must be enabled in the target environment
+3. The task must be an audit-type task that completed the quality path
 
 ---
 
 ## 13. What NOT to do
 
-- **Don't** treat Adros as a thin proxy to Google/Meta APIs — it wraps them with marketing intelligence and scope enforcement
-- **Don't** hardcode specialist display names — use runtime actor IDs
-- **Don't** assume all tasks are the same type — audit tasks, creative tasks, and deploy tasks have different lifecycles
-- **Don't** skip ownership checks when building custom orchestration on top
-- **Don't** replace weekly logs — append to them
-- **Don't** expect webhook retries — build idempotent receivers
+- Do not hardcode specialist display names
+- Do not assume all tasks share the same lifecycle
+- Do not skip ownership checks in custom orchestration
+- Do not replace weekly logs
+- Do not expect webhook retries
