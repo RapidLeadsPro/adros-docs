@@ -42,3 +42,8 @@ Thumbs.db
 
 # Debug
 .turbo
+
+# next-sitemap generated output (regenerated on postbuild)
+public/sitemap.xml
+public/sitemap-*.xml
+public/robots.txt

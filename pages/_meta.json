@@ -8,6 +8,11 @@
   },
   "integrations": "Integrations",
   "faq": "FAQ & Troubleshooting",
+  "-- help": {
+    "type": "separator",
+    "title": "Help Center"
+  },
+  "help": "Help Center",
   "-- external": {
     "type": "separator",
     "title": "Links"
