@@ -1,0 +1,29 @@
+{
+  "version": "1.0.0",
+  "name": "adros-docs",
+  "owner": "Documentation team",
+  "responsibility": {
+    "owns": [
+      "customer and developer API documentation",
+      "setup guides and examples"
+    ],
+    "does_not_own": [
+      "engineering documentation (adros/docs)",
+      "marketing material (adros-website)"
+    ]
+  },
+  "contracts": {},
+  "dependencies": [
+    {
+      "repo": "adros",
+      "contract": "core_protocol_v1",
+      "version": "1.0.0"
+    }
+  ],
+  "current_state": {
+    "branch": "main"
+  },
+  "entry_points": {
+    "main_module": "pages/"
+  }
+}
