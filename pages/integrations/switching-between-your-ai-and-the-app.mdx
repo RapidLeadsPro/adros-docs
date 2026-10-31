@@ -1,0 +1,116 @@
+---
+title: Switching between your AI and the App
+description: Planned workspace history, file versions, and attribution when moving between your connected AI and the Adros App.
+---
+
+# Switching between your AI and the App
+
+> **Draft — planned features, not yet available.** This guide describes the planned
+> shared workspace experience. The activity tools, file versions, trash, and
+> cross-channel summaries below must not be treated as available in your account.
+> This page is being prepared for review and is held from publication until the
+> required capabilities are enabled for the first owners.
+
+## One workspace across both channels
+
+The planned experience will let you continue work in the App or through your own
+connected AI without creating a separate history. Both channels will read the
+same saved activity and file records for the selected brand and offer.
+
+The App will show files, decisions, and work produced by Adros agents. Your own AI
+will be able to read saved workspace records and write back its work through MCP.
+A file produced by your AI will remain attributed to your AI when you open it in
+the App. Opening, moving, or approving a file will not change who produced it.
+
+Before continuing, you will select the same brand and offer in either channel.
+Research and shared brand facts will sit under **Whole brand**. Within each brand
+and offer, files and activity will use the same stage names:
+
+- Step 1 Research
+- Step 2A Big Idea
+- Step 2B Structure and Forecast
+- Step 3 Creative
+- Step 4 Deploy
+- Step 5 Optimization
+
+## Who produced the work
+
+The planned attribution will distinguish the producer from the channel used to
+access the workspace. Using the App will not, by itself, mean that Adros produced
+a file.
+
+| Producer label | Meaning |
+| --- | --- |
+| Your name | Work recorded as produced by you, the owner. |
+| Adros followed by the team name | Work produced by the named Adros agent or team. |
+| Your AI via MCP, followed by the connected client name | Work produced by your own connected AI. The client name will identify the connection, not the brand. |
+| Adros system | A recorded system action or handoff. |
+
+Activity will separately identify whether it came through the App, external MCP,
+or a system handoff. Missing attribution will be shown as unavailable; the system
+will not guess the producer from a model, file location, or access channel.
+
+**Produced**, **Updated**, and **Approved** will have separate timestamps where
+recorded. They will use your local time, with a relative hint. An update will not
+be presented as an approval, and a missing time will not be invented.
+
+## How files and history will work
+
+Files will organize artifacts by brand, offer, and stage. Command Center will
+hold the activity ledger and decisions, and the Workspace stage drawer will show
+the same artifact records.
+
+Every save will create a new revision. **Current** will mark the selected revision;
+it will not replace or erase older revisions. A version list will let you inspect
+the history, with comparisons for supported text and workbook artifacts.
+
+The planned file states will be:
+
+| State | Meaning |
+| --- | --- |
+| Draft | Work still in preparation. |
+| Current | The revision marked as the current version. |
+| Approved | A recorded approval exists for the revision. |
+| Locked | The revision is locked under its workflow. |
+| Stale | The revision needs review because its context has changed. |
+| Superseded | A later revision has taken its place. |
+| Unreceipted | An existing file has no matching artifact receipt; its missing history will not be fabricated. |
+
+Moving or deleting a file will leave an activity record and a receipt explaining
+what happened. Deletion will move the file to trash for 30 days, during which it
+can be restored. After that retention period, deletion will be permanent and will
+also have a receipt. These are planned protections; do not rely on them for files
+deleted before this capability becomes available.
+
+## Picking up where the other channel stopped
+
+A planned **Since you were here** card will summarize the other channel's latest
+actions for a brand or offer. Your connected AI's resume information will include
+recent activity and the current files for each offer, so it can inspect saved work
+before continuing.
+
+These summaries will describe recorded actions. They will not schedule work,
+approve a decision, or start a new run on their own.
+
+## Planned tools for your connected AI
+
+The planned MCP read tools are:
+
+| Tool | Intended result |
+| --- | --- |
+| `get_adros_workspace_activity` | Saved activity for the selected brand, with offer, stage, producer, and channel filters. |
+| `list_adros_workspace_files` | Saved file records and their provenance for the same workspace. |
+| `read_adros_workspace_artifact` | A specifically identified artifact revision, with its receipt and provenance. |
+
+Activity and file lists will support paging and will use the same underlying
+records as the App. Artifact reads will require the matching brand, task, stage,
+revision, and receipt references. A missing or unavailable record will be reported
+as unavailable rather than replaced with guessed content.
+
+These tools are planned as free reads of saved workspace records. They will not
+start paid research or creative generation. Separately chargeable work will
+remain subject to its credit quote and approval; switching channels will not
+itself authorize that work.
+
+Until these capabilities are enabled, this draft is a description of intended
+behavior, not an instruction to call tools that may be unavailable.
