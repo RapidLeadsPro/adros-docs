@@ -1,11 +1,11 @@
 ---
 title: Tool Catalog
-description: All 74 Adros MCP tools grouped by category — pattern matching, memory, creative generation, Meta Ads, Google Ads, keyword research, workflow guides, optimization.
+description: The Adros MCP tools grouped by category — pattern matching, memory, creative generation, Meta Ads, Google Ads, keyword research, workflow guides, optimization.
 ---
 
 # Tool Catalog
 
-Adros exposes **74 MCP tools** via Streamable HTTP at `https://api.adros.ai/mcp`. Every tool accepts a `user_token` parameter (auto-injected from the MCP context if present).
+Adros exposes its **MCP tools** via Streamable HTTP at `https://api.adros.ai/mcp`. Every tool accepts a `user_token` parameter (auto-injected from the MCP context if present).
 
 This page is grouped by category. Click any category to see all tools and their purposes.
 
@@ -48,20 +48,21 @@ The institutional brain. Business context, personas, action logs, pattern-level 
 
 ---
 
-## Creative Pipeline (8 tools)
+## Creative Pipeline (9 tools)
 
-The generation layer. Anchored to the pattern DB, powered by Nano Banana Pro (Gemini 2.5).
+The generation layer. Anchored to the pattern DB and your brand context. Ideas and images are billed in credits; a refused call costs nothing and tells your assistant what to do next.
 
 | Tool | Purpose |
 |---|---|
-| `ideate_creative_concepts` | Generate N bold creative concept ideas using the Creative Divergence Engine (5 archetypes) |
-| `build_creative_prompt` | Compose a full Nano Banana Pro prompt by merging pattern blueprint + brand + business context + persona (use `auto_select=True` and `mode='bold'`) |
-| `generate_creative` | Generate an image from a prompt. **Always `generator='nano_banana_pro'`**. 60s idempotency cache + 20/hr rate limit |
-| `edit_creative` | Iterate on a generated image with a refinement prompt |
+| `get_creative_ideation_context` | Free. Shows the creative plan, the credit quote for an ideation run, your saved audiences and your saved idea boards. For ideas you picked it returns the saved brief, so you never pay again just to fetch it. |
+| `ideate_creative_concepts` | Creates a board of creative ideas for your brand and may render the strongest ones as images (included in the quoted credits). It is billed in credits: your assistant shows you the quote first and runs it only after you say yes. If your brand has several saved audiences, your assistant asks which one the ideas are for. Ideas that need your own photo or footage, such as a real founder, practitioner or customer, are shown but never generated. Finished images are saved to your Creatives library. |
+| `build_creative_prompt` | Builds the image prompt for an idea you picked, from the idea's saved brief plus your brand and business context (Google Performance Max and Display clean assets are the exception). Your assistant passes the prompt on unchanged. Each approved headline, subheadline and call to action is lettered once on the image. |
+| `generate_creative` | Renders an ad image from the prompt built for an idea you picked (Google Performance Max and Display clean assets are the exception). Your assistant shows the credit cost and renders only after you say yes. Finished images are saved to your Creatives library. Calls are limited to 20 per hour, and an identical call within 60 seconds returns the same image. |
+| `edit_creative` | Fixes an Adros image you already have. Your assistant names the image, describes the change in up to 600 characters and runs it after you confirm the credit cost. Images you saved from outside Adros cannot be edited this way. |
 | `validate_creative` | Post-generation QA pass — does it match the brief, brand, compliance? |
-| `verify_visual_reference` | Verify a reference image before it gets sent to Gemini |
+| `verify_visual_reference` | Verify and save a visual reference (a real product, place, logo or uniform) before it is used in an ad |
 | `analyze_creative_style` | Analyze the style of an external creative (for pattern extraction / inspiration) |
-| `save_external_creative` | Save a competitor or inspiration creative into your DAM |
+| `save_external_creative` | Saves an image you made outside Adros to your Creatives library. It is labelled as external, is not treated as an Adros idea and cannot be edited with `edit_creative`. |
 
 ---
 
@@ -237,6 +238,7 @@ See [Contract Layer](/integrations/contract-layer) for the full integration spec
 - **Rate limiting:** `generate_creative` capped at **20/hour/user**
 - **Idempotency:** `generate_creative` has a **60-second cache** on `hash(prompt[:200] + user_id + aspect_ratio)` to prevent duplicate images from retry storms
 - **Logging:** every tool call is logged via `AutoLogMCPApp` middleware for billing + audit
+- **Short tool list:** some connections show a short list instead of every tool. Use `list_adros_core_tools` to see what is available, `get_adros_core_tool_schema` for one tool's inputs, `call_adros_core_tool` to run it and `read_adros_core_tool` for reads that change nothing.
 
 ---
 
