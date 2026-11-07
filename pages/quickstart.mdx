@@ -56,7 +56,7 @@ The fastest path — Claude Desktop natively supports MCP over Streamable HTTP.
 }
 ```
 
-**3. Restart Claude Desktop.** You should see a hammer icon at the bottom of the chat input — click it to verify Adros tools are loaded. You should see 74 tools.
+**3. Restart Claude Desktop.** You should see a hammer icon at the bottom of the chat input — click it to verify Adros tools are loaded. You should see the Adros tools. Depending on your plan and how you connect, your assistant sees either the full tool list or a short one; with the short list it finds Adros tools with `list_adros_core_tools`, reads their inputs with `get_adros_core_tool_schema` and runs them with `call_adros_core_tool`. Both reach the same Adros features and the same credit rules.
 
 **4. Test it.** In a new chat, say:
 > *"Use Adros to list my clients and tell me which ones are in 'optimizing' state."*
@@ -143,7 +143,7 @@ If you get a `200` with real data — you're connected.
 
 ## Next steps
 
-- **Read the [Technical Overview](/integrations/overview)** to understand what Adros actually does (4,022 patterns, 74 tools, daily monitor, contract layer).
+- **Read the [Technical Overview](/integrations/overview)** to understand what Adros actually does (4,022 patterns, the MCP tool catalog, daily monitor, contract layer).
 - **Browse the [Tool Catalog](/tools)** to see every MCP tool grouped by category.
 - **Skim the [FAQ](/faq)** for the 5 most common setup mistakes.
 - **Go to [app.adros.ai](https://app.adros.ai)** and connect your Meta + Google Ads accounts so Adros has data to work with.

@@ -44,7 +44,7 @@ const config: DocsThemeConfig = {
     const { frontMatter, title } = useConfig()
     const description =
       frontMatter.description ||
-      'Adros AI — the marketing brain for AI agents. 4,022 performance-tested ad patterns, 74 MCP tools, autonomous monitoring, and a contract layer for orchestration.'
+      'Adros AI — the marketing brain for AI agents. 4,022 performance-tested ad patterns, the Adros MCP tools, autonomous monitoring, and a contract layer for orchestration.'
     const pageTitle = title ? `${title} — Adros Docs` : 'Adros Docs'
     return (
       <>
