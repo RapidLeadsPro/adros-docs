@@ -1,0 +1,142 @@
+---
+title: The Adros Cycle
+description: The five Adros steps on one page for connected AIs and their owners. The first call, what each step needs, the Angle Matrix, what each refusal names, and what costs credits.
+---
+
+# The Adros cycle in one page
+
+Adros works in five steps, the same for Adros's own agents (CMO, CD, CEO), for your AI over MCP and for the dashboard. Everything is saved on Adros's side, so whoever picks the work up next sees the same state. If you are an AI reading this, follow the path below and do not improvise a different order.
+
+**Endpoint:** `https://api.adros.ai/mcp`
+
+> Behaviour here follows Adros Core `main`. If a live reply differs from this page, trust the live reply and tell the owner.
+
+---
+
+## The first call, every time
+
+```text
+get_adros_cycle_status(client_name="<exact brand name>")
+```
+
+It is free and changes nothing. It returns, for each of the five steps, the state, who did it (an Adros agent, or "your AI via MCP"), when, a version, and the exact next call. Nothing is inferred from conversation: only work that was saved through a tool counts. If the brand has exactly one active task, the status binds to it; with several it asks which; with none it stays at brand level.
+
+If your connection shows the short tool list, run it through the gateway: `read_adros_core_tool` for reads (`tool_name="get_adros_cycle_status"`, `arguments_json="{\"client_name\": \"...\"}"`) and `call_adros_core_tool` for actions. For a compact version of this page, call `get_adros_lite_guide` with `guide_type="cycle"`.
+
+---
+
+## The five steps
+
+| Step | What it produces | What it needs first |
+|---|---|---|
+| **1 Research** | Business context, the offer, personas, market and voice-of-customer research. Deep research runs only with the owner's permission. | Business context |
+| **2 Structure** | Campaigns, ad sets, budgets and KPI. Every prospecting ad set names the angles it will test. | Step 1 recorded |
+| **3 Creative** | The angle grid for one offer and one persona, then the owner's picks, then presentations (ideas) for each picked angle. | A named offer and a named persona |
+| **4 Deploy** | The fit check, then one TEST ad set per angle, then the deploy report. | Approved Step 2 structure and approved Step 3 creatives |
+| **5 Optimize** | Angle reads, verdicts (winner, iterate, retire), expansion of winners, new-angle tests. | Live ads |
+
+Rules that hold for every connected AI:
+
+- **Jumping in anywhere is allowed. Skipping is not.** Whatever you are asked for, Adros walks back to the first missing ingredient, refuses at no charge and tells you what to ask the owner.
+- **Never redo or re-charge a completed step.** At a half-done step, ask the owner instead of guessing.
+- **Every paid call is quoted first, in credits, and runs only after the owner's exact OK.**
+- **Picks and confirmations are tool calls.** What the owner only said in your chat is invisible to Adros.
+- **Saving work is free.** Always save confirmed work.
+
+---
+
+## Step 1: context, personas and the offer
+
+Before creatives, Adros needs the business context, the **offer** (a product or service, named with `product_name`) and the **persona** (the person the ads speak to, named with `persona_id`). Read what is saved with `get_business_context`, `get_personas` and `get_adros_workspace_resume`. Save what the owner confirms with `save_business_context`, `save_persona` and `create_client_product` / `update_client_product`. All saves are free. See [Personas and offers](#personas-and-offers) below.
+
+A structure draft needs Step 1 recorded. There is no waiver: the only path is to run Step 1, or the deep-research offer, first.
+
+## Step 3: the Angle Matrix
+
+An **angle** is a reason to buy, aimed at one stage of the buyer's awareness and one human drive. Adros keeps a grid of 40 angles for each offer and persona. Each cell has a stage, a drive, an audience pocket, a hook, a core claim and a fit grade (strong, ok or weak, with a reason). Weak cells keep their reason and are never padded.
+
+The path, in order:
+
+1. **Quote the fill (free).** `get_creative_ideation_context(operation="quote", mode="angles", client_name=..., persona_id=..., product_name=...)`.
+2. **Fill the grid (about 4 credits).** After the owner's exact OK, `ideate_creative_concepts(mode="angles", ...)`. Adros saves 40 angles and four **pre-picks**. A refresh (`refresh=true`, about 2 credits) re-fills only untested and weak cells and keeps winners, picks and history. Read a grid again, free, with `get_creative_ideation_context(operation="angles_read", grid_id=...)`.
+3. **Show the owner the grid and get their picks.** Pre-picks stand until the owner changes them. Save the picks with `ideate_creative_concepts(mode="pick_angles", angle_ids="<id>,<id>", persona_id=...)`. Free.
+4. **Presentations, priced by the quote.** Quote, then after the owner's OK: `ideate_creative_concepts(mode="new", angle_ids="<picked ids>", persona_id=...)`. Adros makes three ideas per picked angle, each in a different visual family, with the angle held fixed. Up to five angles per call. The price is the quote's credit cap for those ideas; there is no fixed tariff.
+5. **Show every idea and wait for the owner's picks.** Save them with `ideate_creative_concepts(mode="select")`. When automatic rendering is on, selecting also renders the picks, and the quote covers that.
+6. **Build and render from a picked idea only.** `build_creative_prompt` with the returned `selected_brief` unchanged, then, after the owner confirms the credit cost, `generate_creative` with the returned prompt and `creative_contract` unchanged. Open each image, check brand, product, language and headline, then show the owner. Images land in the Creatives library.
+
+Creatives need a picked idea. `build_creative_prompt` and `generate_creative` refuse without one, at no charge. Google Performance Max and Display clean assets are the one exception.
+
+### What a paid call needs from you
+
+Paid calls carry a confirmation that must equal the free quote. `ideate_creative_concepts` takes `subscriber_ideation_confirmation` (inside the same `arguments_json` when you use the gateway): the quote's `requested_inputs` and `execution_charge_cap_credits`, with `approved: true`. `generate_creative` takes `subscriber_generation_confirmation` (the approved generator, count and credits), and `edit_creative` takes `subscriber_edit_confirmation`. A missing or stale confirmation is refused at no charge and the reply carries the current quote and the confirmation to send back. Picks (`pick_angles`) need none.
+
+## Step 4: the fit check
+
+Before deploy, `check_structure_fit(client_name=...)` (free) compares the structure with your creatives: per prospecting ad set, which angles are required, which creatives exist for them, the gaps, and where each creative would go. Where angles are missing, Adros proposes a structure patch and asks the owner to fill the gaps. A passed report is tied to the structure revision and the creative set it checked; if either changes, the check runs again before deploy. Creatives made before angles existed are listed as unassigned until the owner assigns one with `assign_creative_angle` (free).
+
+## Step 5: verdicts
+
+Adros pools spend and conversions per angle in TEST ad sets and gives each angle a verdict: **winner**, **iterate** or **retire**. A confirmed winner can be expanded with `ideate_creative_concepts(mode="expand", angle_ids=<winner>)` (6 to 10 new executions, quoted first). An account that already runs ads enters here: Adros places the live ads on the grid first with `mode="classify_live"` (about 2 credits per 25 ads, quoted first). "More creatives" usually becomes "more angles".
+
+---
+
+## What each gate refuses, and the next call it names
+
+A refusal is a reply, not an error. It never charges credits, never writes anything and never calls a provider. Each one names the question to ask the owner and the exact next call.
+
+| You called | Refused with | Why | Next call it names |
+|---|---|---|---|
+| `validate_structure_draft`, `save_validated_structure_draft` | `awaiting_step_1_research` | Step 1 is not recorded | `get_adros_workspace_resume`, then Step 1 (or deep research) with the owner's agreement |
+| `record_deploy_review_decision`, `apply_approved_deploy_package` | `awaiting_approved_structure` | Step 2 is not approved | `get_adros_workspace_resume` (approve the structure review) or `get_structure_draft` |
+| the same two deploy tools | `awaiting_fit_check` | The fit check has not passed | `check_structure_fit` |
+| `apply_approved_deploy_package` | `deploy_apply_fit_stale` | Structure or creatives changed after the package was built | `check_structure_fit`, then a fresh deploy request |
+| Step 5 review tools on an account with live ads Adros did not deploy | `awaiting_angle_classification` | Live ads are not yet placed on the grid | `get_creative_ideation_context` quote with `mode="classify_live"` |
+| `ideate_creative_concepts` (angles, new, more) with several saved personas and no `persona_id` | `persona_choice_required` | Adros will not guess the audience | the same call again with the owner's `persona_id` (or `none`) |
+| `ideate_creative_concepts(mode="new", angle_ids=...)` with no grid | `angle_grid_required` | Presentations are made for picked angles | quote and run `mode="angles"` |
+| `mode="new"` with no or unpicked angles | `angle_picks_required`, `angle_not_picked` | The angles are not picked | `mode="pick_angles"`, then `mode="new"` |
+| `mode="angles"` when the grid exists | `angle_grid_exists` | One grid per offer and persona | `angles_read`, or a quoted `refresh=true` |
+| `mode="expand"` without a winner | `expand_needs_winner` | Expansion needs a confirmed winning angle | wait for the Step 5 read |
+| `build_creative_prompt`, `generate_creative` without a picked idea | `awaiting_idea_selection` | Only picked Adros ideas are built or rendered | `ideate_creative_concepts` (`select`) |
+| `generate_creative` without the confirmation | `awaiting_generation_confirmation` | The owner has not OK'd the credits | the same call with `subscriber_generation_confirmation` |
+
+A save with a stale `expected_version` (see below) is refused the same way and tells you who changed the record and when.
+
+**Versions.** `save_validated_structure_draft` (and `save_structure_draft` where it is offered) takes `expected_version`, the structure version you read (from `get_structure_draft` or the cycle status). If someone else changed the structure since, the save is refused free, naming the newer change and its time. Re-read and retry. Angle picks are protected the same way inside Adros: a pick or fill against a grid that changed returns `angle_grid_stale` and nothing is written; read the grid again and retry.
+
+---
+
+## Personas and offers
+
+**Naming an offer.** Pass the offer as `product_name` on `get_creative_ideation_context` and `ideate_creative_concepts`. One angle grid exists per offer and persona, so the offer name is part of the grid's identity. A brand with one offer uses `brand` as the offer key. Save an offer with `create_client_product` (first one `is_primary=true`) and change it with `update_client_product` (non-empty fields only). Both are free.
+
+**Naming a persona.** Pass the persona's id as `persona_id`. `get_personas` lists the saved personas with their ids; `save_persona` adds one (free, one call per distinct customer archetype).
+
+**More than one saved persona, none named.** Adros does not guess. The call is refused at no charge with `persona_choice_required`, lists the saved personas, and asks you to put the question to the owner and call again with the chosen `persona_id`. Pass `persona_id="none"` only when the owner says no saved persona fits; the ideas then use the business context and the brief alone. With exactly one saved persona, it is used. With none saved, ideas use the business context only. Pass the same `persona_id` to `pick_angles`, `new`, `select` and `build_creative_prompt`, because the grid belongs to that persona.
+
+**The owner can do this too.** On the Brands page of the dashboard ([app.adros.ai](https://app.adros.ai)) the owner can add personas and offers and edit them. Anything added there is what `get_personas` and the offer list return next call.
+
+---
+
+## What costs credits
+
+| Action | Credits |
+|---|---|
+| `get_adros_cycle_status`, `get_adros_skill`, `get_creative_ideation_context` (plan, quote, list, read, `angles_read`) | 0 |
+| `ideate_creative_concepts` `mode="angles"` (fill the grid) | about 4, once, on a successful fill |
+| `mode="angles"` with `refresh=true` | about 2 |
+| `mode="pick_angles"` | 0 |
+| `mode="new"` with `angle_ids` (presentations) | the quote's credit cap, metered inside it |
+| `mode="select"` | 0 without automatic rendering; with it, the quoted renders |
+| `mode="classify_live"` | about 2 per 25 ads, quoted first |
+| `mode="expand"` | the quoted price for the new ideas |
+| `check_structure_fit`, `assign_creative_angle` | 0 |
+| `generate_creative` | credits per saved image, confirmed first |
+| `edit_creative` | 2 |
+| Saving work: `create_client_product`, `update_client_product`, `save_external_creative`, `schedule_optimization_review`, `submit_creative_pack_for_review` | 0 |
+| Any refused call | 0 |
+
+A failed or conflicting fill charges nothing. The [Tool Catalog](/tools#credit-cost-at-a-glance) repeats these costs next to each tool; your balance is in the dashboard.
+
+## Adros skills, readable by your AI
+
+`get_adros_skill(name, page=1)` returns the text of an Adros skill, paged, free. Names: `angle-matrix`, `creative-concept-generation`, `mta-meta-optimization`, `gta-google-optimization`, `meta-structure-strategy`, `google-structure-strategy`, `market-voc-research`, `irresistible-offer-strategy` (and the ecommerce versions). Adros applies these itself on the server, so you do not need to reproduce them; read them to understand the rules the gates enforce.
