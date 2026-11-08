@@ -124,6 +124,25 @@ Adros speaks **Streamable HTTP MCP** (spec version `2025-03-26`). Any MCP client
 
 ---
 
+## Your first call, and the one clear path
+
+Whatever the task, your assistant's first call is the free cycle status:
+
+```text
+get_adros_cycle_status(client_name="<exact brand name>")
+```
+
+It shows where the brand stands in the five Adros steps (Research, Structure, Creative, Deploy, Optimize), who did each, and the exact next call. From there:
+
+1. **Step 1:** make sure the business context, the offer (`product_name`) and the persona (`persona_id`) are saved. Ask the owner; Adros never guesses them.
+2. **Step 3:** quote, then fill the angle grid for that offer and persona (about 4 credits), let the owner pick angles, then make presentations for the picked angles. The owner approves every paid call by its exact quote.
+3. **Build creatives only from an idea the owner picked.**
+4. **Step 4/5:** the fit check before deploy, and verdicts per angle once ads are live.
+
+Anything called out of order is refused at no charge and the reply names the missing piece and the exact next call. The whole path, with every refusal, is on [The Adros cycle in one page](/integrations/adros-cycle).
+
+---
+
 ## Raw curl test (no client needed)
 
 If you want to verify your token works before setting up a client, hit a REST endpoint directly:
@@ -144,6 +163,7 @@ If you get a `200` with real data — you're connected.
 ## Next steps
 
 - **Read the [Technical Overview](/integrations/overview)** to understand what Adros actually does (4,022 patterns, the MCP tool catalog, daily monitor, contract layer).
+- **Read [The Adros cycle in one page](/integrations/adros-cycle)**: the five steps, the Angle Matrix and what each gate refuses.
 - **Browse the [Tool Catalog](/tools)** to see every MCP tool grouped by category.
 - **Skim the [FAQ](/faq)** for the 5 most common setup mistakes.
 - **Go to [app.adros.ai](https://app.adros.ai)** and connect your Meta + Google Ads accounts so Adros has data to work with.

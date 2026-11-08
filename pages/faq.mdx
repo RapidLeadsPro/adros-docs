@@ -126,9 +126,29 @@ Creative generation is rate-limited. Wait for the window to reset or reduce dupl
 
 Usually this is a prompt-construction issue, not a generation issue. Make sure you are using the correct workflow, brand context, and generation settings for your environment.
 
-### Why does my assistant ask which audience to use?
+### Why does my assistant ask which audience (persona) to use?
 
-**Adros will not guess.** If your brand has more than one saved audience, your assistant asks you to pick one (or none) before it creates ideas. No credits are charged until you choose.
+**Adros will not guess.** If your brand has more than one saved persona and none is named, the call is refused at no charge (`persona_choice_required`) with the list of personas. Your assistant asks you to pick one, or `none` if no saved persona fits, and calls again with that `persona_id`. One persona is used automatically. You can add and edit personas and offers on the Brands page of the dashboard, and your assistant can save them with `save_persona` and `create_client_product`, both free.
+
+### Why was my assistant asked for an offer and a persona before making creatives?
+
+Angles are made per offer (`product_name`) and per persona (`persona_id`), so both have to be named. Creatives without an offer and persona stop and ask, and are never guessed. See [The Adros cycle in one page](/integrations/adros-cycle#personas-and-offers).
+
+### Why were my creatives weak before, and what changes?
+
+Earlier, an AI connected over MCP could ask for images before the basics were settled: which offer, which audience, and which reason to buy. With several saved audiences it could also pick one for you. The result was ideas that read as generic or aimed at the wrong person. What changes:
+
+- The first call is now the free cycle status, so your AI sees what is already done and the next step instead of starting from scratch.
+- Adros asks for the offer and persona and no longer guesses between several personas.
+- Creative work starts from the angle grid (40 angles per offer and persona). You pick angles, Adros makes three ideas per picked angle in different visual styles, and images are built only from an idea you picked.
+- Calls made out of order are refused at no charge, with the exact next call. Saving work is free.
+- Before deploy, a fit check confirms your creatives cover the angles the structure plans to test, and after launch verdicts are read per angle.
+
+Existing ideas and images are kept. If one has no angle, the owner can assign one (free) so the fit check counts it. The full path is on [The Adros cycle in one page](/integrations/adros-cycle).
+
+### My call was refused. Did it cost credits?
+
+No. A refusal never charges credits, writes nothing and calls no provider. It names the question to ask and the exact next call. The table of refusals is in [The Adros cycle in one page](/integrations/adros-cycle#what-each-gate-refuses-and-the-next-call-it-names).
 
 ### Why does my assistant ask me to confirm credits?
 

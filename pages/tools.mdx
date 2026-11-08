@@ -28,7 +28,7 @@ The moat. Tools that surface and apply the 4,022-pattern database.
 
 ---
 
-## Memory & Context (11 tools)
+## Memory & Context
 
 The institutional brain. Business context, personas, action logs, pattern-level history.
 
@@ -36,8 +36,11 @@ The institutional brain. Business context, personas, action logs, pattern-level 
 |---|---|
 | `save_business_context` | Persist a client's business profile (name, USP, competitors, constraints, budget, goals) |
 | `get_business_context` | Load business profile for the current client (first call every session) |
-| `save_persona` | Save a customer persona (name, age, pain points, desires, objections, language) |
-| `get_personas` | List all personas for a client |
+| `save_persona` | Save a customer persona (`name`, `client_name`, `age_range`, `pain_points`, `desires`, `objections`, `language`, `platforms`, `persona_type`, `budget_weight`). One call per distinct customer archetype. Free. The owner can also add personas on the Brands page. |
+| `get_personas` | List the personas for a client, with their ids. Pass the id you need as `persona_id` when you ideate. |
+| `create_client_product` | Save an offer (product or service) so creatives are scoped to it: `name`, `client_name`, `description`, `value_prop`, `positioning`, `audience_label`, `landing_url`, `language`, `can_say_csv`, `cannot_say_csv`, `is_primary` (the first offer should be primary). Free. |
+| `update_client_product` | Change an owned offer by `product_id` (from `list_client_products`); only non-empty fields change. Free. |
+| `list_client_products` | List a client's offers with their ids. |
 | `log_weekly_action` | Append an event to the `weekly_logs` action stream (every specialist action goes here) |
 | `recall_weekly_log` | Fetch recent actions for a client (`weeks_back=4` is a good default) |
 | `update_log_result` | Attach a result/metric update to an existing log row |
@@ -48,21 +51,40 @@ The institutional brain. Business context, personas, action logs, pattern-level 
 
 ---
 
-## Creative Pipeline (9 tools)
+## The Adros cycle (start here)
 
-The generation layer. Anchored to the pattern DB and your brand context. Ideas and images are billed in credits; a refused call costs nothing and tells your assistant what to do next.
+Every connected AI starts with one free read, then follows the five steps. The full path, with what each gate refuses and the next call it names, is on [The Adros cycle in one page](/integrations/adros-cycle).
 
-| Tool | Purpose |
-|---|---|
-| `get_creative_ideation_context` | Free. Shows the creative plan, the credit quote for an ideation run, your saved audiences and your saved idea boards. For ideas you picked it returns the saved brief, so you never pay again just to fetch it. |
-| `ideate_creative_concepts` | Creates a board of creative ideas for your brand and may render the strongest ones as images (included in the quoted credits). It is billed in credits: your assistant shows you the quote first and runs it only after you say yes. If your brand has several saved audiences, your assistant asks which one the ideas are for. Ideas that need your own photo or footage, such as a real founder, practitioner or customer, are shown but never generated. Finished images are saved to your Creatives library. |
-| `build_creative_prompt` | Builds the image prompt for an idea you picked, from the idea's saved brief plus your brand and business context (Google Performance Max and Display clean assets are the exception). Your assistant passes the prompt on unchanged. Each approved headline, subheadline and call to action is lettered once on the image. |
-| `generate_creative` | Renders an ad image from the prompt built for an idea you picked (Google Performance Max and Display clean assets are the exception). Your assistant shows the credit cost and renders only after you say yes. Finished images are saved to your Creatives library. Calls are limited to 20 per hour, and an identical call within 60 seconds returns the same image. |
-| `edit_creative` | Fixes an Adros image you already have. Your assistant names the image, describes the change in up to 600 characters and runs it after you confirm the credit cost. Images you saved from outside Adros cannot be edited this way. |
-| `validate_creative` | Post-generation QA pass — does it match the brief, brand, compliance? |
-| `verify_visual_reference` | Verify and save a visual reference (a real product, place, logo or uniform) before it is used in an ad |
-| `analyze_creative_style` | Analyze the style of an external creative (for pattern extraction / inspiration) |
-| `save_external_creative` | Saves an image you made outside Adros to your Creatives library. It is labelled as external, is not treated as an Adros idea and cannot be edited with `edit_creative`. |
+| Tool | Purpose | Credits |
+|---|---|---|
+| `get_adros_cycle_status` | Free read, always the first call. Arguments: `client_name`, optional `task_id`. Returns each of the five steps with its state, who did it (an Adros agent or your AI via MCP), when, its version and the exact next call. One active task binds it; several ask which; none keeps it at brand level. | 0 |
+| `get_adros_skill` | Free read of an Adros skill and its framework text, paged. Arguments: `name` (for example `angle-matrix`, `creative-concept-generation`, `market-voc-research`, `irresistible-offer-strategy`, the Meta and Google optimization and structure skills), `page` (starts at 1). | 0 |
+| `check_structure_fit` | Free Step 4 fit check: per ad set, required angles, creatives, gaps and placement. Deploy needs a pass. Argument: `client_name`. | 0 |
+| `assign_creative_angle` | Records the owner's chosen angle on an older creative so the fit check counts it. Arguments: `client_name`, `creative_id`, `angle_id`. | 0 |
+
+---
+
+## Creative Pipeline (angles and ideas)
+
+The generation layer. Anchored to the pattern DB, your brand context and the Angle Matrix. Ideas and images are billed in credits; a refused call costs nothing and tells your assistant what to do next. Creatives are built only from an idea the owner picked, and the ideas come from a picked angle.
+
+| Tool | Purpose | Credits |
+|---|---|---|
+| `get_creative_ideation_context` | Free planning, quotes and saved reads. `operation`: `plan` (checklist), `quote` (the credit cap of a paid call; pass the `mode` you plan to run), `list`, `read` (saved idea boards) and `angles_read` (list the brand's angle grids, or one grid by `grid_id`). Also shows your saved audiences (`persona_choice_needed` tells your assistant to ask which). Arguments include `client_name`, `mode`, `product_name` (the offer), `persona_id`, `grid_id`, `task_id`. | 0 |
+| `ideate_creative_concepts` | The paid creative engine. `mode="angles"` fills the 40-angle grid for one offer and persona (`refresh=true` re-fills only untested and weak cells). `mode="pick_angles"` saves the owner's `angle_ids` (comma-separated, free). `mode="new"` with `angle_ids` makes three ideas per picked angle, each in a different visual family (up to five angles per call). `more`, `refine` and `combine` extend a board. `mode="select"` saves the owner's picked ideas (`idea_ids`). `render` renders picked ideas (`aspect` `1:1` or `9:16`). `mode="expand"` makes new executions of one confirmed winning angle. `mode="classify_live"` places live ads (`live_ads`) on the grid. Offer: `product_name`. Audience: `persona_id` (`none` for business context only). A paid mode runs only with `subscriber_ideation_confirmation` equal to the free quote. | angles about 4; refresh about 2; picks 0; other modes: the quote's cap, metered; `classify_live` about 2 per 25 ads |
+| `build_creative_prompt` | Builds the image prompt for an idea the owner picked, from the idea's saved brief plus brand and business context (Google Performance Max and Display clean assets are the exception). Pass the returned `selected_brief` unchanged. Each approved headline, subheadline and call to action is lettered once on the image. | see your plan's price list |
+| `generate_creative` | Renders an ad image from the prompt built for a picked idea (Google Performance Max and Display clean assets are the exception). Needs `subscriber_generation_confirmation` after the owner OKs the credits. Finished images are saved to the Creatives library. Calls are limited to 20 per hour, and an identical call within 60 seconds returns the same image. | catalog credits per saved image, confirmed first |
+| `edit_creative` | Fixes an Adros image you already have. Names the image, describes the change in up to 600 characters, needs `subscriber_edit_confirmation`. Images saved from outside Adros cannot be edited this way. | 2 |
+| `validate_creative` | Post-generation QA pass: does it match the brief, brand, compliance? | see your plan's price list |
+| `verify_visual_reference` | Verify and save a visual reference (a real product, place, logo or uniform) before it is used in an ad | see your plan's price list |
+| `analyze_creative_style` | Analyze the style of an external creative (for pattern extraction / inspiration) | see your plan's price list |
+| `save_external_creative` | Saves an image you made outside Adros to your Creatives library. It is labelled as external, is not treated as an Adros idea and cannot be edited with `edit_creative`. Arguments: `image_url` (durable HTTP(S) URL), `client_name`, `prompt_used`, `platform`, `aspect_ratio`. | 0 |
+
+Ideas that need the owner's own photo or footage, such as a real founder, practitioner or customer, are shown but never generated.
+
+### Credit cost at a glance
+
+Saving work is free: `create_client_product`, `update_client_product`, `save_external_creative`, `schedule_optimization_review` and `submit_creative_pack_for_review` cost 0 credits. Reads (`get_adros_cycle_status`, `get_adros_skill`, `get_creative_ideation_context`, `check_structure_fit`) cost 0. Picking angles costs 0. A refused call never charges. Every paid call is quoted first and runs only after the owner's OK.
 
 ---
 
